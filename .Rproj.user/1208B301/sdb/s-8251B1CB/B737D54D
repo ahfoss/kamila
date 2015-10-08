@@ -1,0 +1,16 @@
+{
+    "contents" : "Package: kamila\nType: Package\nTitle: Clustering mixed data\nVersion: 0.1.0\nDate: 2015-10-06\nAuthors@R: c(\n    person(\"Foss\", \"Alexander\", \"H\", \"alexanderhfoss@gmail.com\", c(\"aut\", \"cre\")),\n    person(\"Markatou\", \"Marianthi\", \"\", \"\", c(\"aut\"))\n    )\nDescription: Methods for clustering mixed data.\nDepends: R (>= 3.0.0)\nLicense: GPL-3\nImports: abind,\n    KernSmooth,\n    gtools,\n    Rcpp,\n    mclust,\n    FactoMineR,\n    plyr\nLinkingTo: Rcpp\nSuggests: testthat,\n    Hmisc\n",
+    "created" : 1444327484101.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2553599489",
+    "id" : "B737D54D",
+    "lastKnownWriteTime" : 1444327490,
+    "path" : "~/mixedCluster/kamila_package/kamila/kamila/DESCRIPTION",
+    "project_path" : "DESCRIPTION",
+    "properties" : {
+    },
+    "source_on_save" : false,
+    "type" : "dcf"
+}
