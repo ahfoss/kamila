@@ -260,6 +260,7 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' completely remove a variable's influence on the clustering; weights equal
 #' to 1 leave a variable's contribution unchanged. Weights between 0 and 1
 #' may not be comparable across continuous and categorical variables.
+#' @export
 #' @param conVar A data frame of continuous variables.
 #' @param catFactor A data frame of factors.
 #' @param numClust The number of clusters returned by the algorithm.
