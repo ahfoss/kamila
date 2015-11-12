@@ -42,9 +42,10 @@ sumDistSph<- function(xx) {
 }
 
 #################
-# Modha & Spangler optimal weight clustering
+# Modha & Spangler clustering
 # Note that categorical data should be factors
-owClust <- function(conData,categFact,samplingInt=0.1,centers,iter.max,nstart) {
+#' @export
+msClust <- function(conData,categFact,samplingInt=0.1,centers,iter.max,nstart) {
   numUnique <- unique(cbind(conData,categFact))
   if (nrow(numUnique) < centers) {
     stop('more cluster centers than distinct data points.')

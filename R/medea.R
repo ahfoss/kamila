@@ -37,6 +37,7 @@ setArgs <- function(input, name, default) {
 
 #' MEDEA weight calculation
 #' 
+#' @export
 #' @param dat A data frame of numeric and factor variables.
 #' @param discretizationMethod The discretization method used.
 #' @param associationMethod The method for calculating the association matrix.
