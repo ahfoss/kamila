@@ -3,11 +3,11 @@
 \alias{kamila}
 \docType{package}
 \title{
-What the package does (short line)
-~~ package title ~~
+Clustering for mixed continuous and categorical data sets
+~~ KAMILA ~~
 }
 \description{
-More about what it does (maybe more than one line)
+A collection of methods for clustering mixed type data, including KAMILA (KAy-means for MIxed LArge data)
 ~~ A concise (1-5 lines) description of the package ~~
 }
 \details{
