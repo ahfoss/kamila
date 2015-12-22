@@ -15,7 +15,6 @@ Imports: abind,
     gtools,
     Rcpp,
     mclust,
-    FactoMineR,
     plyr
 LinkingTo: Rcpp
 Suggests: testthat,
