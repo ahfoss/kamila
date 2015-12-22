@@ -277,7 +277,7 @@ nclustFull <- function(
 
 # Uses Hmisc for errbar
 #' @export
-plot.nclustFull <- function(obj) {
+plot_nclustFull <- function(obj) {
   if ('Hmisc' %in% installed.packages()) {
     ses <- apply(obj$scores,1,sd) #/sqrt(obj$nrep)
     with(obj,errbar(x=2:kmax,y=psVec,yplus=psVec+ses,yminus=psVec-ses,ylim=c(0,1)))
