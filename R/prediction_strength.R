@@ -142,6 +142,7 @@ getSubsetCon <- function(dat,inds) dat[inds,]
 # function for subsetting matrix of mixed variables
 # Data is list, 1st element continuous, 2nd element categorical,
 # and possible 3rd element cyclical
+#' @export
 getSubsetMix <- function(dat,inds) {
   if (length(dat)==3) {
     return(list(
