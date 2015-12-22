@@ -643,6 +643,7 @@ cyclicalCoding <- function(invar) {
 # Function to take kamila results object and classify new points
 # Note newData is a list with two elements, continuous data and dataframe of 
 # factors of categorial varables.
+#' @export
 classifyKamila <- function(obj,newData) {
   if (length(newData) == 3) {
     cyclicRecoded <- as.data.frame(lapply(newData[[3]],cyclicalCoding))
