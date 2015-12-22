@@ -347,7 +347,7 @@ kamila <- function(
       numLev
       ,function(xx) {
         matrix(
-          data=log(rdirichlet(n=numClust,alpha=rep(1,xx)))
+          data=log(gtools::rdirichlet(n=numClust,alpha=rep(1,xx)))
           ,nrow=numClust
           ,dimnames=list(clust=1:numClust,level=1:xx)
         )
