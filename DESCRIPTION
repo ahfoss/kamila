@@ -8,14 +8,18 @@ Authors@R: c(
     person("Markatou", "Marianthi", "", "", c("aut"))
     )
 Description: Methods for clustering mixed data.
-Depends: R (>= 3.0.0)
+Depends:
+    R (>= 3.0.0)
 License: GPL-3
-Imports: abind,
+Imports:
+    abind,
     KernSmooth,
     gtools,
     Rcpp,
     mclust,
     plyr
 LinkingTo: Rcpp
-Suggests: testthat,
+Suggests:
+    testthat,
     Hmisc
+RoxygenNote: 5.0.1
