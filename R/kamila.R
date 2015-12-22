@@ -158,7 +158,7 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
   MAXDENS <- 1
   # Note using a chosen constant for bw reduces time by about 7%
   radialBW <- bw.nrd0(radii)
-  radKDE <- bkde(
+  radKDE <- KernSmooth::bkde(
     x = radii
     ,kernel = "normal"
     ,bandwidth = radialBW
