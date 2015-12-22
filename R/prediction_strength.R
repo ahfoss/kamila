@@ -71,9 +71,7 @@ cyclicalCoding <- function(invar) {
 
 
 # wrapper for kamila + medea functions for passing into nclust1x
-# Note dat is a 2-element list with continuous variables as first
-# element, and categorical as 2nd.
-# Note that "dat" is a 3-element list with continuous variables as first
+# Note that \code{dat} is a 3-element list with continuous variables as first
 # element, categorical as 2nd, and optional cyclical variables as 3rd.
 # Cyclical variables must be coded as factors, unit circle recoding
 # is done automatically.
@@ -118,7 +116,8 @@ kamilaMedeaMethod <- function(dat,k) {
 
   medeaTmp <- medeaWgts(
     dat = medeaVar
-   ,centers = k
+   ,associationMethod = 'famd'
+   ,verbosity=FALSE
   )
 
   res <- kamila4(
