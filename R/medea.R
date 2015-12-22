@@ -170,7 +170,7 @@ medeaWgts <- function(
     diag(assocMat) <- 1
     for (i in 1:(nvar-1)) {
       for (j in (i+1):nvar) {
-        assocMat[i,j] <- assocMat[j,i] <- adjustedRandIndex(dat[,i],dat[,j])
+        assocMat[i,j] <- assocMat[j,i] <- mclust::adjustedRandIndex(dat[,i],dat[,j])
       }
     }
     # analyze matrix
