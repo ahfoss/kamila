@@ -48,7 +48,7 @@ classify.kmeans <- function(res,newData) {
 # Note dat is a 2-element list with continuous in 1st and categorical in 2nd
 # Note that return object must have memberships listed in field "cluster"
 kamilaMethod <- function(dat,k) {
-  res <- kamila4(
+  res <- kamila(
     conVar=dat[[1]]
    ,catFactor=dat[[2]]
    ,numClust=k
@@ -121,7 +121,7 @@ kamilaMedeaMethod <- function(dat,k) {
    ,verbosity=FALSE
   )
 
-  res <- kamila4(
+  res <- kamila(
     conVar = kamilaConVar
    ,catFactor = dat[[2]]
    ,numClust = k
