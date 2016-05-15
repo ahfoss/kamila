@@ -82,7 +82,8 @@ initMeans <- function(conVar,method=conInitMethod,numClust) {
 ######################
 # remove bumps (i.e. make sure xx is nondecreasing)
 # Version 1 starts from right side moving left, replaces any decrease
-# with the previous value
+# with the previous value.
+# Not used; doesn't appear to be necessary.
 rmBump1 <- function(xx) {
   for (i in (length(xx)-1):1) {
     if (xx[i] < xx[i+1]) xx[i] <- xx[i+1]
@@ -190,7 +191,7 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
   radY[overMax] <- MAXDENS
   
   # remove bumps (i.e. make sure nondecreasing)
-  # (eventually may want to replace with better strategy)
+  # not used currently
   #  radY <- rmBump1(radY)
   
   # normalize to area 1
