@@ -431,22 +431,12 @@ kamila <- function(
       # and creates a list of length Q, each element is n X k
       # giving the log prob for nth observed level for variable q, cluster k
       
-      # old method
-      #catLikWeight <- function(ind) catWeights[ind]*t(logProbsCond_i[[ind]][,as.numeric(catFactor[,ind])])
-      #individualLogProbs = lapply(
-      #  X = 1:numCatVar
-      # ,FUN = catLikWeight
-      #)
-      
       # New Rcpp method
       individualLogProbs <- getIndividualLogProbs(
         catFactorNum = catFactorNumeric
         ,catWeights = catWeights
         ,logProbsCond_i = logProbsCond_i
       )
-      
-      #print('exp(individualLogProbs)')
-      #print(lapply(individualLogProbs,function(xx) head(exp(xx))))
       
       #7 log likelihood eval for each point, for each of k clusters (WEIGHTED)
       # output is n X k matrix of log likelihoods
@@ -460,18 +450,12 @@ kamila <- function(
       
       # NOT scaling relative to weights
       allLogLiks <- logDistRadDens_i + catLogLiks
-      #print('allLogLiks')
-      #print(head(allLogLiks))
-      
       
       #8 partition data into clusters
       membOld <- membNew
       
       #membNew <- apply(allLogLiks,1,which.max)
       membNew <- rowMaxInds(allLogLiks)
-      
-      #print('membNew')
-      #str(membNew)
       
       #9 calculate new means: k X p matrix
       #means_i <- as.matrix(aggregate(x=conVar,by=list(membNew),FUN=mean)[,-1])
@@ -501,10 +485,6 @@ kamila <- function(
       #    return( log(jointTab / rowSums(jointTab)) )
       #  }
       #)
-      
-      
-      #print('exp(logProbsCond_i)')
-      #print(lapply(logProbsCond_i,function(xx) head(exp(xx))))
       
       # print current plot and metrics, if requested
       if (FALSE) { #(verbose) {
@@ -541,7 +521,6 @@ kamila <- function(
     if (degenerateSoln) {
       totalLogLikVect[init] <- -Inf
     } else {
-      #totalLogLikVect[init] <- sum(apply(allLogLiks,1,max))
       totalLogLikVect[init] <- sum(rowMax(allLogLiks))
     }
     
@@ -553,6 +532,9 @@ kamila <- function(
     winDistVect[init] <- sum(minDist_i)
     winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
     if (winToBetRat < 0) winToBetRat <- 100
+    # Note catLogLik is negative, larger is better
+    # Note WSS/BSS is positive, with smaller better
+    # Thus, we maximize their product.
     objectiveVect[init] <- winToBetRat * catLogLikVect[init]
     
     # Store current solution if objective beats all others
@@ -666,7 +648,6 @@ classifyKamila <- function(obj,newData) {
     ,wgts=input$conWeights
   ))
   minDistances <- apply(distances,1,min)
-  #print(minDistances)
   
   ########################################
   # 2) classify new points
@@ -678,7 +659,6 @@ classifyKamila <- function(obj,newData) {
     ,myMeans=finalCenters
     ,wgts=input$conWeights
   ))
-  #print(newDistances)
   
   # calculate continuous log density KD estimates
   logRadDens <- matrix(
@@ -686,8 +666,6 @@ classifyKamila <- function(obj,newData) {
     ,nrow=nrow(newCon)
     ,ncol=nrow(obj$finalCenters)
   )
-  #print('logRadDens')
-  #print(logRadDens)
   
   # calculate categorical probabilities
   logClustProbs <- lapply(obj$finalProbs,log)
@@ -697,22 +675,13 @@ classifyKamila <- function(obj,newData) {
       input$catWeights[ind]*t(logClustProbs[[ind]][,as.numeric(newCatFactor[,ind])])
     }
   )) # this is a list of q matrices, each n x k; with elements log-likelihood
-  #print('logCatKProbs')
-  #print(logCatKProbs)
   
   catLogLiks <- Reduce(f='+',x=logCatKProbs)
-  #print('catLogLiks')
-  #print(catLogLiks)
   
   # maximum "likelihood" classification
   combinedLogLik <- logRadDens + catLogLiks
-  #print('combinedLogLik')
-  #print(combinedLogLik)
   
   membership <- as.numeric(apply(combinedLogLik,1,which.max))
-  #print('membership')
-  #print(membership)
   
-  #pairs(cbind(obj$verbose$catLogLikVect,catLogLiks))
   return(membership)
 }
