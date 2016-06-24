@@ -29,7 +29,7 @@ orthMean <- function(xx) {
 #################
 # distortion sum, euclidean
 sumDistEuc <- function(xx) {
-  mn <- apply(xx,2,mean)
+  mn <- colMeans(xx)
   cent <- xx - rep(1,nrow(xx)) %o% mn
   sum(cent^2)
 }
