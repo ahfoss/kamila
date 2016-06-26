@@ -281,7 +281,6 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' \item{finalProbs}{}
 #' \item{input}{Object with the given input parameter values.}
 #' \item{verbose}{An optionally returned object with more detailed information.}
-
 kamila <- function(
   conVar
   ,catFactor
