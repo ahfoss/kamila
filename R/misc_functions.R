@@ -89,19 +89,11 @@ withinClusterDist <- function(dat,centroids,distFun,memberships) {
 
 #################
 # distortion sum, euclidean
-<<<<<<< HEAD
-#sumDistEuc <- function(xx) {
-#  mn <- apply(xx,2,mean)
-#  cent <- xx - rep(1,nrow(xx)) %o% mn
-#  sum(cent^2)
-#}
-=======
 sumDistEuc <- function(xx) {
   mn <- colMeans(xx)
   cent <- xx - rep(1,nrow(xx)) %o% mn
   sum(cent^2)
 }
->>>>>>> origin/master
 
 #################
 # distortion sum, spherical
@@ -112,7 +104,6 @@ sumDistEuc <- function(xx) {
 
 
 #################
-<<<<<<< HEAD
 # Weighted k-means for mixed-type data.
 # conData and catData must be coercible to data frames.
 # catData can be a data frame of factor variables or dummy-coded categorical
@@ -122,6 +113,8 @@ sumDistEuc <- function(xx) {
 # 1 - conWeight.
 # ... optional arguments passed to kmeans. An input argument of 'centers' is
 # ignored.
+#' @export
+
 wkmeans <- function(
   conData,
   catData,
@@ -134,17 +127,7 @@ wkmeans <- function(
   catTypes <- sapply(catData,class)
   if (!all(catTypes=='factor') && !all(catTypes %in% c('integer','numeric'))) {
     stop('Argument catData must be a data frame with all factor variables or all numeric variables.')
-=======
-# Modha & Spangler clustering
-# Note that categorical data should be factors
-#' @export
-msClust <- function(conData,categFact,samplingInt=0.1,centers,iter.max,nstart) {
-  numUnique <- unique(cbind(conData,categFact))
-  if (nrow(numUnique) < centers) {
-    stop('more cluster centers than distinct data points.')
->>>>>>> origin/master
   }
-  # other type checks: conWeight scalar in [0,1], conData integer/numeric,
   if (!all(sapply(conData,class) %in% c('integer','numeric'))) {
     stop('Argument conData must be data frame with all integer/numeric types.')
   }
@@ -178,25 +161,34 @@ msClust <- function(conData,categFact,samplingInt=0.1,centers,iter.max,nstart) {
 }
 
 
-#################
-# A general implementation of Modha-Spangler clustering for mixed-type data.
-#
-# The specific allowable input of conData, catData, and nclust depend on the
-# specification of the user-specified clustFun argument.
-# 
-# searchDensity is an integer determining the number of distinct cluster
-# weightings evaluated in the brute-force search.
-# 
-# clustFun must be a function accepting inputs (conData,catData,conWeight,
-# nclust,...).
-# clustFun must return an element $cluster with cluster memberships denoted by
-# integers 1:nclust.
-# clustFun must return an element $conCenters and $catCenters denoting data
-# frames where each row denotes a cluster-specific centroid.
-# clustFun must allow nclust = 1, in which case $centers returns a data frame
-# with a single row.
-# conDist and catDist must each take two data frame rows as input and return a
-# scalar distance measure.
+#' A general implementation of Modha-Spangler clustering for mixed-type data.
+#'
+#' Modha-Spangler clustering estimates the optimal weighting for continuous
+#' vs categorical variables using a brute-force search strategy.
+#'
+#' Modha-Spangler clustering uses a brute-force search strategy to estimate
+#' the optimal weighting for continuous vs categorical variables. This
+#' implementation admits an arbitrary clustering function and arbitrary
+#' objective functions for continuous and categorical variables.
+#' 
+#' The input parameter clustFun must be a function accepting inputs 
+#' (conData, catData, conWeight, nclust, ...) and returning a list containing
+#' (at least) the elements cluster, conCenters, and catCenters. The list element
+#' "cluster" contains cluster memberships denoted by the integers 1:nclust. The
+#' list elements "conCenters" and "catCenters" must be data frames whose rows
+#' denote cluster centroids. The function clustFun must allow nclust = 1, in
+#' which case $centers returns a data frame with a single row.
+#' Input parameters conDist and catDist are functions that must each take two
+#' data frame rows as input and return a scalar distance measure.
+#' @export
+#' @param conData A data frame of continuous variables.
+#' @param catData A data frame of categorical variables; the allowable variable types depend on the specific clustering function used.
+#' @param nclust An integer specifying the number of clusters.
+#' @param searchDensity An integer determining the number of distinct cluster weightings evaluated in the brute-force search.
+#' @param clustFun The clustering function to be applied.
+#' @param conDist The continuous distance function used to construct the objective function.
+#' @param catDist The categorical distance function used to construct the objective function.
+
 gmsClust <- function(
   conData,
   catData,
@@ -286,9 +278,6 @@ gmsClust <- function(
   ))
 }
 
-
-
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #################
 ## Modha & Spangler optimal weight clustering

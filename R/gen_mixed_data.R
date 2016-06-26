@@ -82,6 +82,7 @@
 #    categorical).
 ###########################################################
 
+#' @export
 
 genMixedData = function(
   sampSize
