@@ -19,7 +19,8 @@ medeaWgts(dat, discretizationMethod = "kmeans", associationMethod = "ari",
 \item{...}{Optional input to the discretization function.}
 }
 \value{
-A vector of variable-specific weights with length equal to \code{ncol(dat)}.
+A list containing a vector \code{wgts} of variable-specific weights with
+length equal to \code{ncol(dat)}.
 }
 \description{
 MEDEA weight calculation
