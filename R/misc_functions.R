@@ -114,7 +114,6 @@ sumDistEuc <- function(xx) {
 # ... optional arguments passed to kmeans. An input argument of 'centers' is
 # ignored.
 #' @export
-
 wkmeans <- function(
   conData,
   catData,
@@ -188,7 +187,6 @@ wkmeans <- function(
 #' @param clustFun The clustering function to be applied.
 #' @param conDist The continuous distance function used to construct the objective function.
 #' @param catDist The categorical distance function used to construct the objective function.
-
 gmsClust <- function(
   conData,
   catData,

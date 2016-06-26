@@ -4,8 +4,9 @@ Title: Clustering mixed data
 Version: 0.1.0
 Date: 2015-10-06
 Authors@R: c(
-    person("Foss", "Alexander", "H", "alexanderhfoss@gmail.com", c("aut", "cre")),
-    person("Markatou", "Marianthi", "", "", c("aut"))
+    person("Foss", "Alexander", email = "alexanderhfoss@gmail.com",
+           role = c("aut", "cre")),
+    person("Markatou", "Marianthi", role = c("aut"))
     )
 Description: Methods for clustering mixed data.
 Depends:
