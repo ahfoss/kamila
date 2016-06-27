@@ -2,7 +2,7 @@
 .Rhistory
 
 # RStudio files
-.Rproj.user/*
+.Rproj.user/
 
 # Windows image file caches
 Thumbs.db
