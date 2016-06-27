@@ -28,10 +28,6 @@
 #    of an observation being drawn from that population.
 #    NOTE THAT CURRENTLY ONLY 2 POPULATIONS ARE SUPPORTED
 #
-# conErrDist = 'mvn'
-#    Continuous error distribution. Currently only independent
-#    Normal supported.
-# 
 # nConVar = {integer}
 #    Number of continuous variables
 #
@@ -42,6 +38,8 @@
 # conErrLev = {numeric \in [0.01,1]}
 #    Amount of overlap introduced by measurement error of
 #    continuous variables.
+#
+# catErrLev = Overlap level of the categoricla variables.
 #
 # nCatVar = {integer}
 #    Number of categorical variables
@@ -57,29 +55,6 @@
 #
 # nCatWithErr = {integer <= nCatVar}
 #    Number of categorical variables with error
-#
-# catErrType = c('none','all','adjacent','early')
-#    Type of measurement error in the categorical data.
-#    Option 'none' bypasses confusion matrices entirely.
-#
-# catErrParams
-#    List of parameters corresponding to catErrType. Option 'all'
-#    doesn't require any parameters, option 'adjacent' and
-#    'early' require a tuple c(epsilon,k), where epsilon
-#    is \in [0,1] and k is an integer. See genConfMat documentation
-#    for details.
-#
-
-
-# TO BE MOVED TO SEPARATE FUNCTION 
-# Now always output as matrix; should be converted later as needed
-# since it doesn't save time to do it here.
-
-# output = c('matrix','dfFactor')
-#    Should data be output as matrices (numeric for continuous,
-#    character for categorical with integer values); or output
-#    as data frames (numeric vars for continuous, factors for
-#    categorical).
 ###########################################################
 
 #' @export
@@ -91,14 +66,9 @@ genMixedData = function(
  ,nConWithErr
  ,nCatWithErr
  ,popProportions
- ,conErrDist = 'mvn'
  ,conErrLev
- ,catErrType
- ,catErrParams
+ ,catErrLev
 ) {
-
-# Function that generates confusion matrices
-source('genConfMat.r')
 
 #####################################
 # ARgument checking
@@ -108,11 +78,6 @@ source('genConfMat.r')
 if (length(popProportions) > 2) {
   # MixSim will need to be used
   stop('Error in genMixedData: More than two populations not currently supported')
-}
-
-# Input continuous distribution
-if (conErrDist != 'mvn') {
-  stop('Error in genMixedData: conErrDist must be mvn')
 }
 
 # check number of continuous error variables specified
@@ -138,7 +103,7 @@ if (nCatLevels %% length(popProportions) != 0) {
 }
 
 # Set variables of general interest
-OVERLAP = 0.01 # overlap
+OVERLAP_DEFAULT = 0.01 # overlap
 
 #####################################
 # Generate true population membership
@@ -156,7 +121,7 @@ trueID = sample(
 
 # Note that mean1 = 0, mean2 = \pm 2 * qnorm(x/2)
 # guarantees overlap of 100*x% when sd=1
-trueMus = c(0,-2*qnorm(OVERLAP/2))
+trueMus = c(0,-2*qnorm(OVERLAP_DEFAULT/2))
 muVec = trueMus[trueID]
 
 # Generate continuous variables
@@ -194,11 +159,10 @@ for (i in 1:nConVar) {
 #####################################
 
 # Generate error-free prob vecs
-rightCatProb = (1-OVERLAP/2) / (nCatLevels/2)
-wrongCatProb = (OVERLAP/2) / (nCatLevels/2)
+rightCatProb = (1-OVERLAP_DEFAULT/2) / (nCatLevels/2)
+wrongCatProb = (OVERLAP_DEFAULT/2) / (nCatLevels/2)
 popProb1 = rep(c(rightCatProb,wrongCatProb),each=nCatLevels/2)
 popProb2 = rep(c(wrongCatProb,rightCatProb),each=nCatLevels/2)
-# NOTE: Currently fixed at 1% overlap
 
 # Number observed pop1
 numInPop1 = sum(trueID==1)
@@ -237,31 +201,23 @@ if (nCatWithErr < nCatVar) {
 
 if (nCatWithErr > 0) {
   # Generate error prone prob vecs
-  # use genConfMat
-  confMat = genConfMat(
-    catErrType = catErrType
-   ,nLev = nCatLevels
-   ,epsilon = catErrParams$epsilon
-   ,k = catErrParams$k
-  )
+  rightCatProbErr = (1-catErrLev/2) / (nCatLevels/2)
+  wrongCatProbErr = (catErrLev/2) / (nCatLevels/2)
+  popProb1Err = rep(c(rightCatProbErr,wrongCatProbErr),each=nCatLevels/2)
+  popProb2Err = rep(c(wrongCatProbErr,rightCatProbErr),each=nCatLevels/2)
 
-  # Note currently assuming uniform probability
-  # for each categorical level within a population
-  popProbErr1 = c(popProb1 %*% confMat)
-  popProbErr2 = c(popProb2 %*% confMat)
-  
   # Simulate pops 1 and 2 with error
   pop1CatWithErr = sample(
     x = 1:nCatLevels
    ,size = numInPop1*nCatWithErr
    ,replace = T
-   ,prob = popProbErr1
+   ,prob = popProb1Err
   )
   pop2CatWithErr = sample(
     x = 1:nCatLevels
    ,size = (sampSize - numInPop1)*nCatWithErr
    ,replace = T
-   ,prob = popProbErr2
+   ,prob = popProb2Err
   )
 
   # combine error data pops 1 and 2
@@ -285,12 +241,6 @@ if (nCatWithErr > 0) {
 # Combine no error with error
 catVars = cbind(catNoErr,catWithErr)
 
-
-#### MOVE to SEPARATE FUNCTiON
-#### Whether to output as factor or character
-# Separate function for converting to dummy variables
-# use data.frame(...,stringsAsFactors)
-
 return(
   list(
     trueID = trueID
@@ -298,9 +248,8 @@ return(
    ,conVars = conVars
    ,errVariance = errVariance
    ,popProbsNoErr = data.frame(popProb1=popProb1,popProb2=popProb2)
-   ,popProbsWithErr = data.frame(popProbErr1=popProbErr1,popProbErr2=popProbErr2)
+   ,popProbsWithErr = data.frame(popProb1Err=popProb1Err,popProb2Err=popProb2Err)
    ,catVars = catVars
-   ,confMat = confMat
   )
 )
 
