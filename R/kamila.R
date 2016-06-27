@@ -4,6 +4,7 @@
 #library(KernSmooth) # for bkde
 #library(gtools) # for rdirichlet
 
+#' @import KernSmooth
 
 #############################
 # compile rcpp functions, including
