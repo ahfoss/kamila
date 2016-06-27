@@ -1,8 +1,12 @@
 
+# For some reason standard importing isn't working for plyr.
+# Workaround:
+#' @import plyr
+
 #################
 # dummy coding of a single factor variable
 dummyCodeOneVar <- function(fac) {
-  fac <- factor(fac)
+  if (class(fac) != 'factor') fac <- factor(fac)
   lev <- levels(fac)
   mapply(
     lev,
@@ -18,13 +22,15 @@ dummyCodeFactorDf <- function(dat) {
   if (!all(catTypes=='factor')) {
     stop('Input data frame must have only factor variables.')
   }
-  Reduce(cbind,lapply(dat,dummyCodeOneVar2))
+  Reduce(cbind,lapply(dat,dummyCodeOneVar))
 }
 
 
 #################
 # Squared Euclidean distance between two rows of a data frame
 squaredEuc <- function(v1,v2) {
+  if (class(v1) == 'factor') v1 <- dummyCodeFactorDf(v1)
+  if (class(v2) == 'factor') v2 <- dummyCodeFactorDf(v2)
   dist(rbind(v1,v2))^2
 }
 
@@ -33,11 +39,18 @@ squaredEuc <- function(v1,v2) {
 # Distance between a data frame and a single centroid using a user-specified
 # distance function.
 distFromData2Centroid <- function(dat,centroid,distFun) {
-  as.vector(apply(
-    X = dat,
-    MARGIN = 1,
-    FUN = function(vec) distFun(vec,centroid)
-  ))
+  numRows <- nrow(dat)
+  outDists <- rep(Inf,numRows)
+  for (i in 1:numRows) {
+    outDists[i] <- distFun(dat[i,], centroid)
+  }
+  return(outDists)
+# can't use apply since it converts from factor to character
+#  as.vector(apply(
+#    X = dat,
+#    MARGIN = 1,
+#    FUN = function(vec) distFun(vec,centroid)
+#  ))
 }
 
 
@@ -71,32 +84,32 @@ withinClusterDist <- function(dat,centroids,distFun,memberships) {
 
 
 #################
-# Cosine distance between (X) an nxp matrix of px1 vectors and (Y)
-# a single px1 vector
-# Note vectors must already be normalized to length 1
+## Cosine distance between (X) an nxp matrix of px1 vectors and (Y)
+## a single px1 vector
+## Note vectors must already be normalized to length 1
 #cosDist <- function(xx,yy) {
 #  2 * (1 - xx %*% yy)
 #}
 
 #################
-# orthant mean
-# input is n x p matrix
-# rows must already be normed
+## orthant mean
+## input is n x p matrix
+## rows must already be normed
 #orthMean <- function(xx) {
 #  cs <- colSums(xx)
 #  cs / sqrt(sum(cs^2))
 #}
 
 #################
-# distortion sum, euclidean
-sumDistEuc <- function(xx) {
-  mn <- colMeans(xx)
-  cent <- xx - rep(1,nrow(xx)) %o% mn
-  sum(cent^2)
-}
+## distortion sum, euclidean
+#sumDistEuc <- function(xx) {
+#  mn <- colMeans(xx)
+#  cent <- xx - rep(1,nrow(xx)) %o% mn
+#  sum(cent^2)
+#}
 
 #################
-# distortion sum, spherical
+## distortion sum, spherical
 #sumDistSph<- function(xx) {
 #  om <- orthMean(xx)
 #  sum(cosDist(xx,om))
@@ -137,7 +150,6 @@ wkmeans <- function(
   if (nclust <= 0) {
     stop('Argument nclust must be a positive integer')
   }
-  # nclust scalar convertible to integer
   if (catTypes[1] == 'factor') {
     catData <- dummyCodeFactorDf(catData)
   }
@@ -154,8 +166,9 @@ wkmeans <- function(
     args = dotArgs
   )
   conVarInds <- 1:ncol(conData)
-  clustRes$conCenters <- clustRes$centers[,conVarInds]
-  clustRes$catCenters <- clustRes$centers[,-conVarInds]
+  # "Reconstitute" means from their scaled versions
+  clustRes$conCenters <- clustRes$centers[,conVarInds] / conWeight
+  clustRes$catCenters <- clustRes$centers[,-conVarInds] / (1-conWeight)
   return(clustRes)
 }
 
@@ -205,27 +218,34 @@ gmsClust <- function(
   bestObj <- Inf
   weights <- seq(
     from = 1/(1+searchDensity),
-    to = 1-1/(1+searchDensity),
+    to = 1 - 1/(1+searchDensity),
     by = 1/(1+searchDensity)
   )
   objFun <- rep(NaN,length(weights))
   Qcon <- rep(NaN,length(weights))
   Qcat <- rep(NaN,length(weights))
-  nullClustering <- clustFun(
-    conData=conData,
-    catData=catData,
-    conWeight=1/2,
-    nclust=1,
+  nullConClustering <- clustFun(
+    conData = conData,
+    catData = rep(catData[1,1], nrow(catData)),
+    conWeight = 1,
+    nclust = 1,
+    ...
+  )
+  nullCatClustering <- clustFun(
+    conData = rep(conData[1,1], nrow(conData)),
+    catData = catData,
+    conWeight = 0,
+    nclust = 1,
     ...
   )
   totalConDist <- sum(distFromData2Centroid(
     dat=conData,
-    centroid=nullClustering$conCenters,
+    centroid=nullConClustering$conCenters,
     distFun = conDist
   ))
   totalCatDist <- sum(distFromData2Centroid(
     dat=catData,
-    centroid=nullClustering$catCenters,
+    centroid=nullCatClustering$catCenters,
     distFun = catDist
   ))
   for (i in 1:length(weights)) {
