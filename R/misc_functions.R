@@ -4,7 +4,11 @@
 #' @import plyr
 
 #################
-# dummy coding of a single factor variable
+# Dummy coding of a single factor variable.
+# Clustering dummy coding, where each variable level gets its own
+# dummy variable to ensure that distances between each level are
+# consistent; as opposed to regression coding with an intercept
+# and a dropped level etc.
 dummyCodeOneVar <- function(fac) {
   if (class(fac) != 'factor') fac <- factor(fac)
   lev <- levels(fac)
