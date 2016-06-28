@@ -33,9 +33,7 @@ dummyCodeFactorDf <- function(dat) {
 #################
 # Squared Euclidean distance between two rows of a data frame
 squaredEuc <- function(v1,v2) {
-  if (class(v1) == 'factor') v1 <- dummyCodeFactorDf(v1)
-  if (class(v2) == 'factor') v2 <- dummyCodeFactorDf(v2)
-  dist(rbind(v1,v2))^2
+  sum( (v1-v2)^2 )
 }
 
 
