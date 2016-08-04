@@ -711,7 +711,7 @@ kamila <- function(
         # Comment out cyclical coding from classifyKamila.
         teIntoTr <- classifyKamila(
           trainClust,
-          list(conVars[testInd,],catFactor[testInd,])
+          list(conVar[testInd,],catFactor[testInd,])
         )
         
         # Initialize D matrix.
