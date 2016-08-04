@@ -737,6 +737,12 @@ kamila <- function(
           clustN <- length(testIndList[[cl]])
           for (i in 1:(clustN-1)) {
             for (j in (i+1):clustN) {
+	      print('i')
+	      print(i)
+	      print('j')
+	      print(j)
+	      print('testIndList[[cl]]')
+	      print(testIndList[[cl]])
               psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
             }
           }
