@@ -685,7 +685,7 @@ kamila <- function(
         )
         
         # cluster training data
-        testClust <- kamila(
+        trainClust <- kamila(
           conVar = conVar[-testInd,],
           catFactor = catFactor[-testInd,],
           numClust = numClust[ithNcInd],
@@ -708,7 +708,6 @@ kamila <- function(
         )
         
         # Allocate test data based on training clusters.
-        # Comment out cyclical coding from classifyKamila.
         teIntoTr <- classifyKamila(
           trainClust,
           list(conVar[testInd,],catFactor[testInd,])
