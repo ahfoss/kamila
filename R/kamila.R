@@ -735,17 +735,19 @@ kamila <- function(
         # replace with RCpp
         for (cl in 1:numClust[ithNcInd]) {
           clustN <- length(testIndList[[cl]])
-          for (i in 1:(clustN-1)) {
-            for (j in (i+1):clustN) {
-	      print('i')
-	      print(i)
-	      print('j')
-	      print(j)
-	      print('testIndList[[cl]]')
-	      print(testIndList[[cl]])
-              psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
+	  if (clustN > 1) {
+            for (i in 1:(clustN-1)) {
+              for (j in (i+1):clustN) {
+	        #print('i')
+	        #print(i)
+	        #print('j')
+	        #print(j)
+	        #print('testIndList[[cl]]')
+	        #print(testIndList[[cl]])
+                psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
+              }
             }
-          }
+	  }
           # * 2 since only upper triangle of dMat is used
           psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
         }
