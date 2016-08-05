@@ -748,12 +748,14 @@ kamila <- function(
               }
             }
 	  }
-          # * 2 since only upper triangle of dMat is used
+          # * 2 since only upper triangle of dMat is used.
+	  # NaN if the cluster was empty.
           psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
         }
 
         # Calculate and update prediction strength results.
-        psCvRes[ithNcInd, cvRun] <- min(psProps)
+	# Remove NaNs for empty clusters.
+        psCvRes[ithNcInd, cvRun] <- min(psProps,na.rm=TRUE)
 	if (is.nan(psCvRes[ithNcInd, cvRun])) {
 	  print('psProps')
 	  print(psProps)
