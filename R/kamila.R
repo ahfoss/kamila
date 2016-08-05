@@ -763,14 +763,18 @@ kamila <- function(
     # score is above the threshold.
     psValues <- avgPredStr + stdErrPredStr
     clustAboveThresh <- psValues > predStrThresh
+
     print('psCvRes')
     print(psCvRes)
     print('predStrThresh')
     print(predStrThresh)
-    print('psValues')
-    print(psValues)
+    print('avgPredStr')
+    print(avgPredStr)
+    print('stdErrPredStr')
+    print(stdErrPredStr)
     print('clustAboveThresh')
     print(clustAboveThresh)
+
     if (all(!clustAboveThresh)) {
       warning('No cluster size is above prediction strength threshold.
         Returning the highest cluster size.')
