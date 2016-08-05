@@ -667,6 +667,8 @@ kamila <- function(
     numInTest <- floor(numObs/2)
     for (cvRun in 1:numPredStrCvRun) {
       for (ithNcInd in 1:length(numClust)) {
+        print('ithNcInd')
+        print(ithNcInd)
         # generate cv indices
         testInd <- sample(numObs, size=numInTest, replace=FALSE)
 
@@ -763,6 +765,8 @@ kamila <- function(
 
     # Calculate final number of clusters: largest # clust such that avg+sd
     # score is above the threshold.
+    print('psCvRes')
+    print(psCvRes)
     print('avgPredStr')
     print(avgPredStr)
     print('stdErrPredStr')
