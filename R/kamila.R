@@ -667,8 +667,6 @@ kamila <- function(
     numInTest <- floor(numObs/2)
     for (cvRun in 1:numPredStrCvRun) {
       for (ithNcInd in 1:length(numClust)) {
-        print('ithNcInd')
-        print(ithNcInd)
         # generate cv indices
         testInd <- sample(numObs, size=numInTest, replace=FALSE)
 
@@ -756,6 +754,12 @@ kamila <- function(
 
         # Calculate and update prediction strength results.
         psCvRes[ithNcInd, cvRun] <- min(psProps)
+	if (is.nan(psCvRes[ithNcInd, cvRun])) {
+	  print('psProps')
+	  print(psProps)
+          print('psCvRes')
+          print(psCvRes)
+	}
       } # end clusters
     } # end cv runs
 
