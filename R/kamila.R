@@ -742,14 +742,13 @@ kamila <- function(
               }
             }
 	  }
-          # * 2 since only upper triangle of dMat is used.
-	  # NaN if the cluster was empty.
-	  if (cvRun==8) {
-	    print('clustN')
-	    print(clustN)
-	    stop('debug1')
+	  if (clustN < 2) {
+	    # if cluster size is 1 or zero, not applicable
+	    psProps[cl] <- NA
+	  } else {
+            # * 2 since only upper triangle of dMat is used.
+            psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
 	  }
-          psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
         }
 
         # Calculate and update prediction strength results.
@@ -759,8 +758,8 @@ kamila <- function(
     } # end cv runs
 
     # Calculate CV estimate of prediction strength for each cluster size.
-    avgPredStr    <- apply(psCvRes,1,mean)
-    stdErrPredStr <- apply(psCvRes,1,sd) / sqrt(numPredStrCvRun)
+    avgPredStr    <- apply(psCvRes,1,mean,na.rm=TRUE)
+    stdErrPredStr <- apply(psCvRes,1,sd,na.rm=TRUE) / sqrt(numPredStrCvRun)
 
     # Calculate final number of clusters: largest # clust such that avg+sd
     # score is above the threshold.
