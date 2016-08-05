@@ -744,14 +744,17 @@ kamila <- function(
 	  }
           # * 2 since only upper triangle of dMat is used.
 	  # NaN if the cluster was empty.
+	  if (cvRun==8) {
+	    print('clustN')
+	    print(clustN)
+	    stop('debug1')
+	  }
           psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
         }
 
         # Calculate and update prediction strength results.
 	# Remove NaNs for empty clusters.
         psCvRes[ithNcInd, cvRun] <- min(psProps,na.rm=TRUE)
-	if (is.nan(psCvRes[ithNcInd, cvRun])) {
-	}
       } # end clusters
     } # end cv runs
 
