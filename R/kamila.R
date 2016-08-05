@@ -763,6 +763,10 @@ kamila <- function(
     # score is above the threshold.
     psValues <- avgPredStr + stdErrPredStr
     clustAboveThresh <- psValues > predStrThresh
+    print('predStrThresh')
+    print(predStrThresh)
+    print('psValues')
+    print(psValues)
     print('clustAboveThresh')
     print(clustAboveThresh)
     if (all(!clustAboveThresh)) {
