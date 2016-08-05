@@ -738,12 +738,6 @@ kamila <- function(
 	  if (clustN > 1) {
             for (i in 1:(clustN-1)) {
               for (j in (i+1):clustN) {
-	        #print('i')
-	        #print(i)
-	        #print('j')
-	        #print(j)
-	        #print('testIndList[[cl]]')
-	        #print(testIndList[[cl]])
                 psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
               }
             }
@@ -757,10 +751,6 @@ kamila <- function(
 	# Remove NaNs for empty clusters.
         psCvRes[ithNcInd, cvRun] <- min(psProps,na.rm=TRUE)
 	if (is.nan(psCvRes[ithNcInd, cvRun])) {
-	  print('psProps')
-	  print(psProps)
-          print('psCvRes')
-          print(psCvRes)
 	}
       } # end clusters
     } # end cv runs
@@ -771,14 +761,6 @@ kamila <- function(
 
     # Calculate final number of clusters: largest # clust such that avg+sd
     # score is above the threshold.
-    print('psCvRes')
-    print(psCvRes)
-    print('avgPredStr')
-    print(avgPredStr)
-    print('stdErrPredStr')
-    print(stdErrPredStr)
-    print('predStrThresh')
-    print(predStrThresh)
     psValues <- avgPredStr + stdErrPredStr
     clustAboveThresh <- psValues > predStrThresh
     if (all(!clustAboveThresh)) {
