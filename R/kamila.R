@@ -763,6 +763,12 @@ kamila <- function(
 
     # Calculate final number of clusters: largest # clust such that avg+sd
     # score is above the threshold.
+    print('avgPredStr')
+    print(avgPredStr)
+    print('stdErrPredStr')
+    print(stdErrPredStr)
+    print('predStrThresh')
+    print(predStrThresh)
     psValues <- avgPredStr + stdErrPredStr
     clustAboveThresh <- psValues > predStrThresh
     if (all(!clustAboveThresh)) {
