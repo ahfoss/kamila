@@ -751,6 +751,14 @@ kamila <- function(
 	  } else {
             # * 2 since only upper triangle of dMat is used.
             psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
+##################################
+            if (is.infinite(psProps[cl])) {
+	      print('clustN')
+	      print(clustN)
+	      print('psProps')
+	      print(psProps)
+	    }
+##################################
 	  }
         }
 ##################################
