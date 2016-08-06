@@ -751,14 +751,6 @@ kamila <- function(
 	  } else {
             # * 2 since only upper triangle of dMat is used.
             psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
-##################################
-            if (is.infinite(psProps[cl])) {
-	      print('clustN')
-	      print(clustN)
-	      print('psProps')
-	      print(psProps)
-	    }
-##################################
 	  }
         }
 ##################################
@@ -772,6 +764,14 @@ kamila <- function(
         # Calculate and update prediction strength results.
 	# Remove NaNs for empty clusters.
         psCvRes[ithNcInd, cvRun] <- min(psProps,na.rm=TRUE)
+##################################
+        if (is.infinite(psCvRes[ithNcInd,cvRun])) {
+	  print('clustN')
+	  print(clustN)
+	  print('psProps')
+	  print(psProps)
+	}
+##################################
       } # end clusters
     } # end cv runs
 
