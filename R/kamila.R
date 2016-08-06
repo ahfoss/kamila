@@ -735,6 +735,14 @@ kamila <- function(
         # replace with RCpp
         for (cl in 1:numClust[ithNcInd]) {
           clustN <- length(testIndList[[cl]])
+##################################
+          if (cvRun %in% c(19,41)) {
+            print('cl')
+            print(cl)
+            print('clustN')
+            print(clustN)
+	  }
+##################################
 	  if (clustN > 1) {
             for (i in 1:(clustN-1)) {
               for (j in (i+1):clustN) {
@@ -756,6 +764,7 @@ kamila <- function(
 
         # Calculate and update prediction strength results.
 	# Remove NaNs for empty clusters.
+	
         psCvRes[ithNcInd, cvRun] <- min(psProps,na.rm=TRUE)
 ##################################
         if (is.infinite(psCvRes[ithNcInd,cvRun])) {
