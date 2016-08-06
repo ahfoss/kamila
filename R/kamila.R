@@ -746,9 +746,7 @@ kamila <- function(
 	    # if cluster size is 1 or zero, not applicable
 	    psProps[cl] <- NA
 ##################################
-	    print('clustN < 2 is true')
-	    print('psProps')
-	    print(psProps)
+	    #print('clustN < 2 is true')
 ##################################
 	  } else {
             # * 2 since only upper triangle of dMat is used.
@@ -761,10 +759,16 @@ kamila <- function(
         psCvRes[ithNcInd, cvRun] <- min(psProps,na.rm=TRUE)
 ##################################
         if (is.infinite(psCvRes[ithNcInd,cvRun])) {
-	  print('clustN')
-	  print(clustN)
+	  print('ithNcInd')
+	  print(ithNcInd)
+	  print('cvRun')
+	  print(cvRun)
 	  print('psCvRes[ithNcInd,cvRun]')
 	  print(psCvRes[ithNcInd,cvRun])
+	  print('clustN')
+	  print(clustN)
+	  print('psProps')
+	  print(psProps)
 	}
 ##################################
       } # end clusters
