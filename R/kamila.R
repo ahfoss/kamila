@@ -744,22 +744,17 @@ kamila <- function(
 	  }
 	  if (clustN < 2) {
 	    # if cluster size is 1 or zero, not applicable
+	    psProps[cl] <- NA
 ##################################
 	    print('clustN < 2 is true')
+	    print('psProps')
+	    print(psProps)
 ##################################
-	    psProps[cl] <- NA
 	  } else {
             # * 2 since only upper triangle of dMat is used.
             psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
 	  }
         }
-##################################
-	if (any(is.infinite(psProps))) {
-	  print('Infinite value of psProps detected')
-	  print('psProps')
-	  print(psProps)
-	}
-##################################
 
         # Calculate and update prediction strength results.
 	# Remove NaNs for empty clusters.
@@ -768,8 +763,8 @@ kamila <- function(
         if (is.infinite(psCvRes[ithNcInd,cvRun])) {
 	  print('clustN')
 	  print(clustN)
-	  print('psProps')
-	  print(psProps)
+	  print('psCvRes[ithNcInd,cvRun]')
+	  print(psCvRes[ithNcInd,cvRun])
 	}
 ##################################
       } # end clusters
