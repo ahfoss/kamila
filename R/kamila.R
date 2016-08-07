@@ -397,7 +397,6 @@ kamila <- function(
       #print(head(dist_i,n=15))
       
       #3 extract min distances
-      #minDist_i <- apply(dist_i,1,min)
       minDist_i <- rowMin(dist_i)
       
       #4 RKDE of min distances
@@ -488,9 +487,8 @@ kamila <- function(
       
       # print current plot and metrics, if requested
       if (FALSE) { #(verbose) {
-        #catLikTmp <- sum(apply(catLogLiks,1,max))
         catLikTmp <- sum(rowMax(catLogLiks))
-        winDistTmp <- sum(minDist_i)
+        winDistTmp <- sum(dist_i[cbind(1:numObs,membNew)])
         winToBetRatTmp <- winDistTmp / (totalDist - winDistTmp)
         if (winToBetRatTmp < 0) winToBetRatTmp <- 100
         objectiveTmp <- winToBetRatTmp * catLikTmp 
@@ -529,7 +527,7 @@ kamila <- function(
     
     # other useful internal measures of cluster quality
     catLogLikVect[init] <- sum(rowMax(catLogLiks))
-    winDistVect[init] <- sum(minDist_i)
+    winDistVect[init] <- sum(dist_i[cbind(1:numObs, membNew)])
     winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
     if (winToBetRat < 0) winToBetRat <- 100
     # Note catLogLik is negative, larger is better
