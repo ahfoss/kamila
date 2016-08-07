@@ -298,7 +298,7 @@ kamila <- function(
   ,catBw = 0.025
   ,verbose = FALSE
   ,calcNumClust = 'none'
-  ,numPredStrCvRun = 20
+  ,numPredStrCvRun = 10
   ,predStrThresh = 0.8
 ) {
 
@@ -738,16 +738,6 @@ kamila <- function(
         # replace with RCpp
         for (cl in 1:numClust[ithNcInd]) {
           clustN <- length(testIndList[[cl]])
-##################################
-          if (cvRun %in% c(19,41)) {
-            print('cl')
-            print(cl)
-            print('clustN')
-            print(clustN)
-            print('str(testIndList)')
-            print(str(testIndList))
-	  }
-##################################
 	  if (clustN > 1) {
 ##################################
 # Construct dMat separately within each cluster
@@ -763,9 +753,6 @@ kamila <- function(
 	  if (clustN < 2) {
 	    # if cluster size is 1 or zero, not applicable
 	    psProps[cl] <- NA
-##################################
-	    #print('clustN < 2 is true')
-##################################
 	  } else {
             # * 2 since only upper triangle of dMat is used.
             psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
@@ -782,20 +769,6 @@ kamila <- function(
 	  no = min(psProps,na.rm=TRUE)
 	)
 
-##################################
-        if (is.infinite(psCvRes[ithNcInd,cvRun])) {
-	  print('ithNcInd')
-	  print(ithNcInd)
-	  print('cvRun')
-	  print(cvRun)
-	  print('psCvRes[ithNcInd,cvRun]')
-	  print(psCvRes[ithNcInd,cvRun])
-	  print('clustN')
-	  print(clustN)
-	  print('psProps')
-	  print(psProps)
-	}
-##################################
       } # end clusters
     } # end cv runs
 
@@ -808,22 +781,10 @@ kamila <- function(
     psValues <- avgPredStr + stdErrPredStr
     clustAboveThresh <- psValues > predStrThresh
 
-##################################
-    print('psCvRes')
-    print(psCvRes)
-    print('predStrThresh')
-    print(predStrThresh)
-    print('avgPredStr')
-    print(avgPredStr)
-    print('stdErrPredStr')
-    print(stdErrPredStr)
-    print('clustAboveThresh')
-    print(clustAboveThresh)
-##################################
-
     if (all(!clustAboveThresh)) {
       warning('No cluster size is above prediction strength threshold.
-        Returning the highest cluster size.')
+        Consider lowering the ps threshold; returning the cluster size
+	corresponding to the highest ps value.')
       kfinal <- numClust[which.max(psValues)]
     } else {
       kfinal <- max(numClust[clustAboveThresh])
