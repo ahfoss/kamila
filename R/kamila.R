@@ -741,6 +741,10 @@ kamila <- function(
             print(cl)
             print('clustN')
             print(clustN)
+            print('testIndList')
+            print(testIndList)
+            print('dMat')
+            print(dMat)
 	  }
 ##################################
 	  if (clustN > 1) {
@@ -763,9 +767,15 @@ kamila <- function(
         }
 
         # Calculate and update prediction strength results.
-	# Remove NaNs for empty clusters.
-	
-        psCvRes[ithNcInd, cvRun] <- min(psProps,na.rm=TRUE)
+	# Remove NaN/NAs for empty clusters.
+	# min(...,na.rm=T) returns Inf if entire vector is NA.
+	# Workaround is simple but WEIRD behavior.
+        psCvRes[ithNcInd, cvRun] <- ifelse(
+	  test = all(is.na(psProps)),
+	  yes = NA,
+	  no = min(psProps,na.rm=TRUE)
+	)
+
 ##################################
         if (is.infinite(psCvRes[ithNcInd,cvRun])) {
 	  print('ithNcInd')
