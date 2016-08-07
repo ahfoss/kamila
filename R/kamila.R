@@ -635,6 +635,10 @@ kamila <- function(
       warning('Input parameter numClust is a scalar; the prediction strength 
         method is probably not appropriate or desired')
     }
+    if (any(numClust > floor(nrow(conVar)/2))) {
+      stop('The number of clusters in input parameter numClust cannot exceed
+        one-half of the sample size.')
+    }
 
     # Test that predStrThresh is within (0,1).
     if ( length(predStrThresh) != 1 ||
