@@ -262,6 +262,14 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' completely remove a variable's influence on the clustering; weights equal
 #' to 1 leave a variable's contribution unchanged. Weights between 0 and 1
 #' may not be comparable across continuous and categorical variables.
+#' Estimating the number of clusters: Default is no estimation method. Setting
+#' calcNumClust to 'ps' uses the prediction strength method of Tibshirani & 
+#' Walther (J. of Comp. and Graphical Stats. 14(3), 2005). There is no perfect
+#' method for estimating the number of clusters; PS tends to give a smaller
+#' number than, say, BIC based methods for large sample sizes. The user must
+#' specify the number of cross-validation runs and the threshold for
+#' determining the number of clusters. The smaller the threshold, the larger
+#' the number of clusters selected.
 #' @export
 #' @param conVar A data frame of continuous variables.
 #' @param catFactor A data frame of factors.
