@@ -741,13 +741,18 @@ kamila <- function(
             print(cl)
             print('clustN')
             print(clustN)
-            print('testIndList')
-            print(testIndList)
-            print('dMat')
-            print(dMat)
+            print('str(testIndList)')
+            print(str(testIndList))
+            print('sum(dMat,na.rm=T)')
+            print(sum(dMat,na.rm=T))
 	  }
 ##################################
 	  if (clustN > 1) {
+##################################
+# Construct dMat separately within each cluster
+# initialize dMat_cl
+# dMat_cl[i,j] <- teIntoTr[testIndList[[cl]][i]] == teIntoTr[testIndList[[cl]][j]]
+##################################
             for (i in 1:(clustN-1)) {
               for (j in (i+1):clustN) {
                 psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
