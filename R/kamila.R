@@ -702,9 +702,12 @@ kamila <- function(
         # Note there are two index systems floating around:
 	# Indices of the full data set slicing out test set (testInd)
         # and indices of cluster membership within test data (testIndList).
+	# If the length of the outputs are equal, mapply defaults to returning
+	# a matrix unless default of SIMPLIFY parameter is changed to FALSE.
         testIndList <- mapply(
           x = 1:numClust[ithNcInd],
-          function(x) which(testClust$finalMemb == x)
+          function(x) which(testClust$finalMemb == x),
+	  SIMPLIFY = FALSE
         )
         
         # Allocate test data based on training clusters.
@@ -743,8 +746,6 @@ kamila <- function(
             print(clustN)
             print('str(testIndList)')
             print(str(testIndList))
-            print('sum(dMat,na.rm=T)')
-            print(sum(dMat,na.rm=T))
 	  }
 ##################################
 	  if (clustN > 1) {
