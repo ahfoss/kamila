@@ -846,7 +846,21 @@ cyclicalCoding <- function(invar) {
 # Function to take kamila results object and classify new points
 # Note newData is a list with two elements, continuous data and dataframe of 
 # factors of categorial varables.
+
+#' Classify new data into existing KAMILA clusters
+#'
+#' A function that classifies a new data set into existing KAMILA clusters
+#' using the output object from the kamila function.
+#'
+#' A function that takes obj, the output from the kamila function, and newData,
+#' a list of length 2, where the first element is a data frame of continuous
+#' variables, and the second element is a data frame of categorical factors.
+#' Both data frames must have the same format as the original data used
+#' to construct the kamila clustering.
 #' @export
+#' @param obj An output object from the kamila function.
+#' @param newData A list of length 2, with first element a data frame of continuous variables, and second element a data frame of categorical factors.
+#' @return An integer vector denoting cluster assignments of the new data points.
 classifyKamila <- function(obj,newData) {
   #if (length(newData) == 3) {
   #  cyclicRecoded <- as.data.frame(lapply(newData[[3]],cyclicalCoding))
