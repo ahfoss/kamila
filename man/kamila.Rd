@@ -6,7 +6,8 @@
 \usage{
 kamila(conVar, catFactor, numClust, numInit, conWeights = rep(1,
   ncol(conVar)), catWeights = rep(1, ncol(catFactor)), maxIter = 25,
-  conInitMethod = "runif", catBw = 0.025, verbose = FALSE)
+  conInitMethod = "runif", catBw = 0.025, verbose = FALSE,
+  calcNumClust = "none", numPredStrCvRun = 10, predStrThresh = 0.8)
 }
 \arguments{
 \item{conVar}{A data frame of continuous variables.}
@@ -23,11 +24,17 @@ kamila(conVar, catFactor, numClust, numInit, conWeights = rep(1,
 
 \item{maxIter}{The maximum number of iterations in each run.}
 
-\item{conInitMethod}{Character: he method used to initialize each run.}
+\item{conInitMethod}{Character: The method used to initialize each run.}
 
 \item{catBw}{The bandwidth used for the categorical kernel.}
 
-\item{verbose}{Logical: whether detailed results should be printed and returned.}
+\item{verbose}{Logical: Whether detailed results should be printed and returned.}
+
+\item{calcNumClust}{Character: Method for selecting the number of clusters.}
+
+\item{numPredStrCvRun}{Numeric: Number of CV runs for prediction strength method. Ignored unless calcNumClust == 'ps'}
+
+\item{predStrThresh}{Numeric: Threshold for prediction strength method. Ignored unless calcNumClust == 'ps'}
 }
 \value{
 A list of the following results objects:
@@ -38,6 +45,7 @@ A list of the following results objects:
 \item{finalCenters}{}
 \item{finalProbs}{}
 \item{input}{Object with the given input parameter values.}
+\item{nClust}{An object describing the results of selecting the number of clusters, empty if calcNumClust == 'none'.}
 \item{verbose}{An optionally returned object with more detailed information.}
 }
 \description{
@@ -65,5 +73,13 @@ Note that weights between 0 and 1 are admissible; weights equal to zero
 completely remove a variable's influence on the clustering; weights equal
 to 1 leave a variable's contribution unchanged. Weights between 0 and 1
 may not be comparable across continuous and categorical variables.
+Estimating the number of clusters: Default is no estimation method. Setting
+calcNumClust to 'ps' uses the prediction strength method of Tibshirani &
+Walther (J. of Comp. and Graphical Stats. 14(3), 2005). There is no perfect
+method for estimating the number of clusters; PS tends to give a smaller
+number than, say, BIC based methods for large sample sizes. The user must
+specify the number of cross-validation runs and the threshold for
+determining the number of clusters. The smaller the threshold, the larger
+the number of clusters selected.
 }
 

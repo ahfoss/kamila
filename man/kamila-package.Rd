@@ -1,40 +1,94 @@
 \name{kamila-package}
 \alias{kamila-package}
-\alias{kamila}
 \docType{package}
 \title{
 Clustering for mixed continuous and categorical data sets
-~~ KAMILA ~~
 }
 \description{
-A collection of methods for clustering mixed type data, including KAMILA (KAy-means for MIxed LArge data)
-~~ A concise (1-5 lines) description of the package ~~
+A collection of methods for clustering mixed type data, including KAMILA (KAy-means for MIxed LArge data) and a flexible implementation of Modha-Spangler clustering
 }
 \details{
 \tabular{ll}{
 Package: \tab kamila\cr
 Type: \tab Package\cr
-Version: \tab 1.0\cr
+Version: \tab 0.1.0\cr
 Date: \tab 2015-10-06\cr
-License: \tab What license is it under?\cr
+License: \tab GPL-3\cr
 }
-~~ An overview of how to use the package, including the most important functions ~~
+
 }
 \author{
-Who wrote it
+Alex Foss and Marianthi Markatou
 
-Maintainer: Who to complain to <yourfault@somewhere.net>
-~~ The author and/or maintainer of the package ~~
+Maintainer: Alex Foss <alexanderhfoss@gmail.com>
 }
 \references{
-~~ Literature or other references for background information ~~
+AH Foss, M Markatou, B Ray, and A Heching (in press). A semiparametric method for clustering mixed data. Machine Learning, DOI: 10.1007/s10994-016-5575-7.
+
+DS Modha and S Spangler (2003). Feature weighting in k-means clustering. Machine Learning 52(3), 217-237.
 }
-~~ Optionally other standard keywords, one per line, from file KEYWORDS in the R documentation directory ~~
-\keyword{ package }
+
+\keyword{ continuous }
 \seealso{
-~~ Optional links to other man pages, e.g. ~~
 ~~ \code{\link[<pkg>:<pkg>-package]{<pkg>}} ~~
 }
 \examples{
-~~ simple examples of the most important functions ~~
+\code{
+# import and format a mixed-type data set
+data(Byar, package='clustMD')
+Byar$logSpap <- log(Byar$Serum.prostatic.acid.phosphatase)
+conInd <- c(5,6,8:10,16)
+conVars <- Byar[,conInd]
+conVars <- data.frame(scale(conVars))
+
+catVarsFac <- Byar[,-c(1:2,conInd,11,14,15)]
+catVarsFac[] <- lapply(catVarsFac, factor)
+catVarsDum <- dummyCodeFactorDf(catVarsFac)
+
+# Modha-Spangler clustering with kmeans default Hartigan-Wong algorithm
+gmsResHw <- gmsClust(conVars, catVarsDum, nclust = 3)
+
+# Modha-Spangler clustering with kmeans Forgy-Lloyd algorithm
+# NOTE searchDensity should be >= 10 for optimal performance:
+# this is just a syntax demo
+gmsResLloyd <- gmsClust(conVars, catVarsDum, nclust = 3,
+  algorithm = "Lloyd", searchDensity = 3)
+
+# KAMILA clustering
+kamRes <- kamila(conVars, catVarsFac, numClust=3, numInit=10)
+
+# Plot results
+library(ggplot2)
+ternarySurvival <- factor(Byar$SurvStat)
+levels(ternarySurvival) <- c('Alive','DeadProst','DeadOther')[c(1,2,rep(3,8))]
+plottingData <- cbind(
+  conVars,
+  catVarsFac,
+  KamilaCluster = factor(kamRes$finalMemb),
+  MSCluster = factor(gmsResHw$results$cluster))
+plottingData$Bone.metastases <- ifelse(
+  plottingData$Bone.metastases == '1', yes='Yes',no='No')
+
+# Plot Modha-Spangler/Hartigan-Wong results
+msPlot <- ggplot(
+  plottingData,
+  aes(
+    x=logSpap,
+    y=Index.of.tumour.stage.and.histolic.grade,
+    color=ternarySurvival,
+    shape=MSCluster))
+plotOpts <- function(pl) (pl + geom_point() + 
+  scale_shape_manual(values=c(2,3,7)) + geom_jitter())
+plotOpts(msPlot)
+
+# Plot KAMILA results
+kamPlot <- ggplot(
+  plottingData,
+  aes(
+    x=logSpap,
+    y=Index.of.tumour.stage.and.histolic.grade,
+    color=ternarySurvival,
+    shape=KamilaCluster))
+plotOpts(kamPlot)
+}
 }

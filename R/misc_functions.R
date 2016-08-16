@@ -21,6 +21,7 @@ dummyCodeOneVar <- function(fac) {
 
 #################
 # Dummy coding of a data frame of factor variables
+#' @export
 dummyCodeFactorDf <- function(dat) {
   catTypes <- sapply(dat,class)
   if (!all(catTypes=='factor')) {
