@@ -1,4 +1,6 @@
 
+# Deprecated functions
+
 # function for calculating approximate BIC
 calcApproxBIC <- function(resObj, BIC=TRUE) {
   nObs <- length(resObj$finalMemb)

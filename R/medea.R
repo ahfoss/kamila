@@ -108,8 +108,9 @@ propVarAssocMat <- function(dat) {
 # Options: ari+kmeans, ari+quantile, or famd
 
 #' MEDEA weight calculation
+#'
+#' IN DEVELOPMENT.
 #' 
-#' @export
 #' @param dat A data frame of numeric and factor variables.
 #' @param discretizationMethod The discretization method used.
 #' @param associationMethod The method for calculating the association matrix.

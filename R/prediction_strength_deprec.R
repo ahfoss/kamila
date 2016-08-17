@@ -1,4 +1,6 @@
 
+# Deprecated functions
+
 # Uses function classifyKamila in kamila.r
 # Uses function medeaWgts in medea.r
 
@@ -78,7 +80,6 @@ cyclicalCoding <- function(invar) {
 # All variable components must be data frames.
 # If no cyclical variables, then leave third position empty.
 # Note that return object must have memberships listed in field "cluster"
-#' @export
 kamilaMedeaMethod <- function(dat,k) {
   numConVar <- ncol(dat[[1]])
   numCatVar <- ncol(dat[[2]])
@@ -136,13 +137,11 @@ kamilaMedeaMethod <- function(dat,k) {
 
 #' function for subsetting matrix of continuous variables
 #'
-#' @export
 getSubsetCon <- function(dat,inds) dat[inds,]
 
 # function for subsetting matrix of mixed variables
 # Data is list, 1st element continuous, 2nd element categorical,
 # and possible 3rd element cyclical
-#' @export
 getSubsetMix <- function(dat,inds) {
   if (length(dat)==3) {
     return(list(
@@ -164,7 +163,6 @@ getSubsetMix <- function(dat,inds) {
 # function for selecting number of clusters using prediction strength
 # Default nfold 2 as recommended in tibshirani 2005
 # This executes one iteration.
-#' @export
 nclust1x <- function(
   inData
  ,clustMethod = function(dat,k) kmeans(x=dat,centers=k)
@@ -225,7 +223,6 @@ nclust1x <- function(
   return(list(psVec=psVec,psMatrix=psMatrix))
 }
 
-#' @export
 nclustFull <- function(
   inData
  ,clustMethod = function(dat,k) kmeans(x=dat,centers=k)
@@ -276,7 +273,6 @@ nclustFull <- function(
 }
 
 # Uses Hmisc for errbar
-#' @export
 plot_nclustFull <- function(obj) {
   if ('Hmisc' %in% installed.packages()) {
     library(Hmisc)
