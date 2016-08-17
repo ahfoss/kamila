@@ -1,63 +1,44 @@
 
-###########################################################
-# genMixedData.r
-#
-# Generate a dataset of mixed variables with underlying 
-# cluster structure.
-# ------------------------------------------------------
-#
-# Distribution of true data is currently independent normal.
-# Separation is currently fixed at 1%.
-#
-# Error distribution is currently independent normal.
-#
-# Error distribution is currently equal among all continuous
-# variables measured with error, and equal among all
-# categorical variables measured with error.
-#
-# ------------------------------------------------------
-# Input args:
-#
-# sampSize = {integer}
-#    'N', that is, number of draws from the mixture distribution.
-#
-# popProportions = {vector of scalars that sums to 1}
-#    Simultaneously specify number and frequency of populations.
-#    length(popProportions) gives number of underlying populations,
-#    with each element corresponding to the prior probability
-#    of an observation being drawn from that population.
-#    NOTE THAT CURRENTLY ONLY 2 POPULATIONS ARE SUPPORTED
-#
-# nConVar = {integer}
-#    Number of continuous variables
-#
-# nConWithErr = {integer <= nConVar} or {boolean vector}
-#    Number of continuous variables with error, or vector
-#    specifying which categorical variables have measurement error.
-#
-# conErrLev = {numeric \in [0.01,1]}
-#    Amount of overlap introduced by measurement error of
-#    continuous variables.
-#
-# catErrLev = Overlap level of the categoricla variables.
-#
-# nCatVar = {integer}
-#    Number of categorical variables
-#
-# nCatLevels = {integer}
-#    A scalar with the number of categories per categorical
-#    Variable. Must be a multiple of 2.
-#    In the future, could have a vector of level numbers,
-#    but assigning populations to categorical levels is
-#    ambiguous when nCatLevels is not a multiple of the number
-#    of populations, so more detailed input or more extensive
-#    assumptions would be needed.
-#
-# nCatWithErr = {integer <= nCatVar}
-#    Number of categorical variables with error
-###########################################################
-
+#' Generate simulated mixed-type data with cluster structure.
+#'
+#' This function simulates mixed-type data sets with a latent cluster
+#' structure, with continuous and nominal variables.
+#'
+#' This function simulates mixed-type data sets with a latent cluster
+#' structure. Continuous variables follow a normal mixture model, and
+#' categorical variables follow a multinomial mixture model. Overlap of the
+#' continuous and categorical variables (i.e. how clear the cluster structure
+#' is) can be manipulated by the user. The default overlap level is 1 percent
+#' (i.e. almost perfect separation), and a user-specified number of continuous
+#' and categorical variables can be specified to be measured with error, in
+#' which case the overlap can be selectively set to be anywhere within 1 and
+#' 100 percent (100 percent corresponds to complete overlap).
+#'
+#' NOTE: Currently, only two populations (clusters) are supported.
+#'
 #' @export
+#' @param sampSize Integer: Size of the simulated data set.
+#' @param nConVar The number of continuous variables.
+#' @param nCatVar The number of categorical variables.
+#' @param nCatLevels Integer: The number of categories per categorical variables. Currently must be a multiple of the number of populations specified in popProportions.
+#' @param nConWithErr Integer: The number of continuous variables with error.
+#' @param nCatWithErr Integer: The number of categorical variables with error.
+#' @param popProportions A vector of scalars that sums to one. The length gives the number of populations (clusters), with values denoting the prior probability of observing a member of the corresponding population. NOTE: currently only two populations are supported.
+#' @param conErrLev A scalar between 0.01 and 1 denoting the univariate overlap between clusters on the continuous variables specified to have error.
+#' @param catErrLev Univariate overlap level for the categorical variables with error.
+#' @return A list with the following elements:
+#' \item{trueID}{Integer vector giving population (cluster) membership of each observation}
+#' \item{trueMus}{Mean parameters used for population (cluster) centers in the continuous variables}
+#' \item{conVars}{The continuous variables}
+#' \item{errVariance}{Variance parameter used for continuous error distribution}
+#' \item{popProbsNoErr}{Multinomial probability vectors for categorical variables without measurement error}
+#' \item{popProbsWithErr}{Multinomial probability vectors for categorical variables with measurement error}
+#' \item{catVars}{The categorical variables}
+#' @examples
+#' dat <- genMixedData(100, 2, 2, nCatLevels=4, nConWithErr=1, nCatWithErr=1,
+#'   popProportions=c(0.3,0.7), conErrLev=0.3, catErrLev=0.2)
+#' with(dat,plot(conVars,col=trueID))
+#' with(dat,table(data.frame(catVars[,1:2],trueID)))
 genMixedData = function(
   sampSize
  ,nConVar
