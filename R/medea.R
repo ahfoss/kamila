@@ -107,17 +107,17 @@ propVarAssocMat <- function(dat) {
 
 # Options: ari+kmeans, ari+quantile, or famd
 
-#' MEDEA weight calculation
-#'
-#' IN DEVELOPMENT.
-#' 
-#' @param dat A data frame of numeric and factor variables.
-#' @param discretizationMethod The discretization method used.
-#' @param associationMethod The method for calculating the association matrix.
-#' @param verbosity Whether to include extended results objects.
-#' @param ... Optional input to the discretization function.
-#' @return A list containing a vector \code{wgts} of variable-specific weights with
-#' length equal to \code{ncol(dat)}.
+# MEDEA weight calculation
+#
+# IN DEVELOPMENT.
+# 
+# @param dat A data frame of numeric and factor variables.
+# @param discretizationMethod The discretization method used.
+# @param associationMethod The method for calculating the association matrix.
+# @param verbosity Whether to include extended results objects.
+# @param ... Optional input to the discretization function.
+# @return A list containing a vector \code{wgts} of variable-specific weights with
+# length equal to \code{ncol(dat)}.
 medeaWgts <- function(
   dat,
   discretizationMethod='kmeans',

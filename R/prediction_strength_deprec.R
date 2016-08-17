@@ -135,8 +135,8 @@ kamilaMedeaMethod <- function(dat,k) {
   return(res)
 }
 
-#' function for subsetting matrix of continuous variables
-#'
+# function for subsetting matrix of continuous variables
+#
 getSubsetCon <- function(dat,inds) dat[inds,]
 
 # function for subsetting matrix of mixed variables
