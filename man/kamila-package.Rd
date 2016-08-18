@@ -29,7 +29,6 @@ DS Modha and S Spangler (2003). Feature weighting in k-means clustering. Machine
 }
 
 \examples{
-\code{
 # import and format a mixed-type data set
 data(Byar, package='clustMD')
 Byar$logSpap <- log(Byar$Serum.prostatic.acid.phosphatase)
@@ -86,5 +85,4 @@ kamPlot <- ggplot(
     color=ternarySurvival,
     shape=KamilaCluster))
 plotOpts(kamPlot)
-}
 }
