@@ -8,6 +8,9 @@ Authors@R: c(
            role = c("aut", "cre")),
     person("Markatou", "Marianthi", role = c("aut"))
     )
+Author: Alexander Foss [aut, cre],
+  Marianthi Markatou [aut]
+Maintainer: Alexander Foss <alexanderhfoss@gmail.com>
 Description: Methods for clustering mixed data.
 Depends:
     R (>= 3.0.0)
