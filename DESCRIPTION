@@ -2,17 +2,17 @@ Package: kamila
 Type: Package
 Title: Clustering mixed data
 Version: 0.1.0
-Date: 2015-10-06
+Date: 2016-08-18
 Authors@R: c(
-    person("Foss", "Alexander", email = "alexanderhfoss@gmail.com",
+    person("Alexander", "Foss", email = "alexanderhfoss@gmail.com",
            role = c("aut", "cre")),
-    person("Markatou", "Marianthi", role = c("aut"))
+    person("Marianthi", "Markatou", role = c("aut"))
     )
 Author: Alexander Foss [aut, cre],
   Marianthi Markatou [aut]
 Maintainer: Alexander Foss <alexanderhfoss@gmail.com>
-Title: Methods for clustering mixed-type data
-Description: This package focuses on methods for clustering mixed-type data,
+Title: Methods for Clustering Mixed-Type Data
+Description: Implements methods for clustering mixed-type data,
   specifically combinations of continuous and nominal data. Special attention
   is paid to the often-overlooked problem of equitably balancing the
   contribution of the continuous and categorical variables. This package
@@ -28,6 +28,8 @@ License: GPL-3
 URL: https://github.com/ahfoss/kamila
 BugReports: https://github.com/ahfoss/kamila/issues
 Imports:
+    stats,
+    graphics,
     abind,
     KernSmooth,
     gtools,

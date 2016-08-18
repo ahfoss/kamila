@@ -273,15 +273,15 @@ nclustFull <- function(
 }
 
 # Uses Hmisc for errbar
-plot_nclustFull <- function(obj) {
-  if ('Hmisc' %in% installed.packages()) {
-    library(Hmisc)
-    ses <- apply(obj$scores,1,sd) #/sqrt(obj$nrep)
-    with(obj,errbar(x=2:kmax,y=psVec,yplus=psVec+ses,yminus=psVec-ses,ylim=c(0,1)))
-    abline(h=obj$thresh,lty=2)
-    text(x=obj$k,y=1,labels='*',cex=3)
-  } else {
-    stop('plot.nclustFull requires package Hmisc to run')
-  }
-}
+#plot_nclustFull <- function(obj) {
+#  if ('Hmisc' %in% installed.packages()) {
+#    library(Hmisc)
+#    ses <- apply(obj$scores,1,sd) #/sqrt(obj$nrep)
+#    with(obj,errbar(x=2:kmax,y=psVec,yplus=psVec+ses,yminus=psVec-ses,ylim=c(0,1)))
+#    abline(h=obj$thresh,lty=2)
+#    text(x=obj$k,y=1,labels='*',cex=3)
+#  } else {
+#    stop('plot.nclustFull requires package Hmisc to run')
+#  }
+#}
 
