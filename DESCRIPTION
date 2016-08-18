@@ -22,5 +22,7 @@ Imports:
 LinkingTo: Rcpp
 Suggests:
     testthat,
+    clustMD,
+    ggplot2,
     Hmisc
 RoxygenNote: 5.0.1

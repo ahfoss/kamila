@@ -21,6 +21,8 @@ gmsClust(conData, catData, nclust, searchDensity = 10, clustFun = wkmeans,
 \item{conDist}{The continuous distance function used to construct the objective function.}
 
 \item{catDist}{The categorical distance function used to construct the objective function.}
+
+\item{...}{Arguments to be passed to the \code{clustFun}.}
 }
 \value{
 A list containing the following results objects:

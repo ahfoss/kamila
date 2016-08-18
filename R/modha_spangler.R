@@ -26,6 +26,7 @@
 #' @param clustFun The clustering function to be applied.
 #' @param conDist The continuous distance function used to construct the objective function.
 #' @param catDist The categorical distance function used to construct the objective function.
+#' @param ... Arguments to be passed to the \code{clustFun}.
 #' @return A list containing the following results objects:
 #' \item{results}{A results object corresponding to the base clustering algorithm}
 #' \item{objFun}{A numeric vector of length \code{searchDensity} containing the values of the objective function for each weight used}

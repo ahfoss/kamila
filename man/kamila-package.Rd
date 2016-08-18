@@ -30,59 +30,62 @@ DS Modha and S Spangler (2003). Feature weighting in k-means clustering. Machine
 
 \examples{
 # import and format a mixed-type data set
-data(Byar, package='clustMD')
-Byar$logSpap <- log(Byar$Serum.prostatic.acid.phosphatase)
-conInd <- c(5,6,8:10,16)
-conVars <- Byar[,conInd]
-conVars <- data.frame(scale(conVars))
-
-catVarsFac <- Byar[,-c(1:2,conInd,11,14,15)]
-catVarsFac[] <- lapply(catVarsFac, factor)
-catVarsDum <- dummyCodeFactorDf(catVarsFac)
-
-# Modha-Spangler clustering with kmeans default Hartigan-Wong algorithm
-gmsResHw <- gmsClust(conVars, catVarsDum, nclust = 3)
-
-# Modha-Spangler clustering with kmeans Forgy-Lloyd algorithm
-# NOTE searchDensity should be >= 10 for optimal performance:
-# this is just a syntax demo
-gmsResLloyd <- gmsClust(conVars, catVarsDum, nclust = 3,
-  algorithm = "Lloyd", searchDensity = 3)
-
-# KAMILA clustering
-kamRes <- kamila(conVars, catVarsFac, numClust=3, numInit=10)
-
-# Plot results
-library(ggplot2)
-ternarySurvival <- factor(Byar$SurvStat)
-levels(ternarySurvival) <- c('Alive','DeadProst','DeadOther')[c(1,2,rep(3,8))]
-plottingData <- cbind(
-  conVars,
-  catVarsFac,
-  KamilaCluster = factor(kamRes$finalMemb),
-  MSCluster = factor(gmsResHw$results$cluster))
-plottingData$Bone.metastases <- ifelse(
-  plottingData$Bone.metastases == '1', yes='Yes',no='No')
-
-# Plot Modha-Spangler/Hartigan-Wong results
-msPlot <- ggplot(
-  plottingData,
-  aes(
-    x=logSpap,
-    y=Index.of.tumour.stage.and.histolic.grade,
-    color=ternarySurvival,
-    shape=MSCluster))
-plotOpts <- function(pl) (pl + geom_point() + 
-  scale_shape_manual(values=c(2,3,7)) + geom_jitter())
-plotOpts(msPlot)
-
-# Plot KAMILA results
-kamPlot <- ggplot(
-  plottingData,
-  aes(
-    x=logSpap,
-    y=Index.of.tumour.stage.and.histolic.grade,
-    color=ternarySurvival,
-    shape=KamilaCluster))
-plotOpts(kamPlot)
+if (requireNamespace("clustMD", quietly = TRUE)) {
+  data(Byar, package='clustMD')
+  Byar$logSpap <- log(Byar$Serum.prostatic.acid.phosphatase)
+  conInd <- c(5,6,8:10,16)
+  conVars <- Byar[,conInd]
+  conVars <- data.frame(scale(conVars))
+  
+  catVarsFac <- Byar[,-c(1:2,conInd,11,14,15)]
+  catVarsFac[] <- lapply(catVarsFac, factor)
+  catVarsDum <- dummyCodeFactorDf(catVarsFac)
+  
+  # Modha-Spangler clustering with kmeans default Hartigan-Wong algorithm
+  gmsResHw <- gmsClust(conVars, catVarsDum, nclust = 3)
+  
+  # Modha-Spangler clustering with kmeans Forgy-Lloyd algorithm
+  # NOTE searchDensity should be >= 10 for optimal performance:
+  # this is just a syntax demo
+  gmsResLloyd <- gmsClust(conVars, catVarsDum, nclust = 3,
+    algorithm = "Lloyd", searchDensity = 3)
+  
+  # KAMILA clustering
+  kamRes <- kamila(conVars, catVarsFac, numClust=3, numInit=10)
+  
+  # Plot results
+  if (requireNamespace("ggplot2", quietly = TRUE)) {
+    ternarySurvival <- factor(Byar$SurvStat)
+    levels(ternarySurvival) <- c('Alive','DeadProst','DeadOther')[c(1,2,rep(3,8))]
+    plottingData <- cbind(
+      conVars,
+      catVarsFac,
+      KamilaCluster = factor(kamRes$finalMemb),
+      MSCluster = factor(gmsResHw$results$cluster))
+    plottingData$Bone.metastases <- ifelse(
+      plottingData$Bone.metastases == '1', yes='Yes',no='No')
+    
+    # Plot Modha-Spangler/Hartigan-Wong results
+    msPlot <- ggplot(
+      plottingData,
+      aes(
+        x=logSpap,
+        y=Index.of.tumour.stage.and.histolic.grade,
+        color=ternarySurvival,
+        shape=MSCluster))
+    plotOpts <- function(pl) (pl + geom_point() + 
+      scale_shape_manual(values=c(2,3,7)) + geom_jitter())
+    plotOpts(msPlot)
+    
+    # Plot KAMILA results
+    kamPlot <- ggplot(
+      plottingData,
+      aes(
+        x=logSpap,
+        y=Index.of.tumour.stage.and.histolic.grade,
+        color=ternarySurvival,
+        shape=KamilaCluster))
+    plotOpts(kamPlot)
+  }
+}
 }
