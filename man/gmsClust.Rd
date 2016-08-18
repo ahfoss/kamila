@@ -22,6 +22,15 @@ gmsClust(conData, catData, nclust, searchDensity = 10, clustFun = wkmeans,
 
 \item{catDist}{The categorical distance function used to construct the objective function.}
 }
+\value{
+A list containing the following results objects:
+\item{results}{A results object corresponding to the base clustering algorithm}
+\item{objFun}{A numeric vector of length \code{searchDensity} containing the values of the objective function for each weight used}
+\item{Qcon}{A numeric vector of length \code{searchDensity} containing the values of the continuous component of the objective function}
+\item{Qcon}{A numeric vector of length \code{searchDensity} containing the values of the categorical component of the objective function}
+\item{bestInd}{The index of the most successful run}
+\item{weights}{A numeric vector of length \code{searchDensity} containing the continuous weights used}
+}
 \description{
 Modha-Spangler clustering estimates the optimal weighting for continuous
 vs categorical variables using a brute-force search strategy.
@@ -41,5 +50,18 @@ denote cluster centroids. The function clustFun must allow nclust = 1, in
 which case $centers returns a data frame with a single row.
 Input parameters conDist and catDist are functions that must each take two
 data frame rows as input and return a scalar distance measure.
+}
+\examples{
+# Generate toy data set with poor quality categorical variables and good
+# quality continuous variables.
+set.seed(1)
+dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
+  nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
+catDf <- dummyCodeFactorDf(data.frame(apply(dat$catVars, 2, factor)))
+conDf <- data.frame(scale(dat$conVars))
+
+msRes <- gmsClust(conDf, catDf, nclust=2)
+
+table(msRes$results$cluster, dat$trueID)
 }
 

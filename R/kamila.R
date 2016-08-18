@@ -284,7 +284,7 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' @param calcNumClust Character: Method for selecting the number of clusters.
 #' @param numPredStrCvRun Numeric: Number of CV runs for prediction strength method. Ignored unless calcNumClust == 'ps'
 #' @param predStrThresh Numeric: Threshold for prediction strength method. Ignored unless calcNumClust == 'ps'
-#' @return A list of the following results objects:
+#' @return A list with the following results objects:
 #' \item{finalMemb}{A numeric vector with cluster assignment indicated by integer.}
 #' \item{numIter}{}
 #' \item{finalLogLik}{The pseudo log-likelihood of the returned clustering.}
@@ -294,6 +294,19 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' \item{input}{Object with the given input parameter values.}
 #' \item{nClust}{An object describing the results of selecting the number of clusters, empty if calcNumClust == 'none'.}
 #' \item{verbose}{An optionally returned object with more detailed information.}
+#' @examples
+#' # Generate toy data set with poor quality categorical variables and good
+#' # quality continuous variables.
+#' set.seed(1)
+#' dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
+#'   nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
+#' catDf <- data.frame(apply(dat$catVars, 2, factor))
+#' conDf <- data.frame(scale(dat$conVars))
+#'
+#' kamRes <- kamila(conDf, catDf, numClust=2, numInit=10)
+#'
+#' table(kamRes$finalMemb, dat$trueID)
+
 kamila <- function(
   conVar
   ,catFactor

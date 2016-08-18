@@ -28,10 +28,6 @@ AH Foss, M Markatou, B Ray, and A Heching (in press). A semiparametric method fo
 DS Modha and S Spangler (2003). Feature weighting in k-means clustering. Machine Learning 52(3), 217-237.
 }
 
-\keyword{ continuous }
-\seealso{
-~~ \code{\link[<pkg>:<pkg>-package]{<pkg>}} ~~
-}
 \examples{
 \code{
 # import and format a mixed-type data set

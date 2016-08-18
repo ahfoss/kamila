@@ -37,7 +37,7 @@ kamila(conVar, catFactor, numClust, numInit, conWeights = rep(1,
 \item{predStrThresh}{Numeric: Threshold for prediction strength method. Ignored unless calcNumClust == 'ps'}
 }
 \value{
-A list of the following results objects:
+A list with the following results objects:
 \item{finalMemb}{A numeric vector with cluster assignment indicated by integer.}
 \item{numIter}{}
 \item{finalLogLik}{The pseudo log-likelihood of the returned clustering.}
@@ -81,5 +81,18 @@ number than, say, BIC based methods for large sample sizes. The user must
 specify the number of cross-validation runs and the threshold for
 determining the number of clusters. The smaller the threshold, the larger
 the number of clusters selected.
+}
+\examples{
+# Generate toy data set with poor quality categorical variables and good
+# quality continuous variables.
+set.seed(1)
+dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
+  nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
+catDf <- data.frame(apply(dat$catVars, 2, factor))
+conDf <- data.frame(scale(dat$conVars))
+
+kamRes <- kamila(conDf, catDf, numClust=2, numInit=10)
+
+table(kamRes$finalMemb, dat$trueID)
 }
 
