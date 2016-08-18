@@ -19,15 +19,30 @@ dummyCodeOneVar <- function(fac) {
 }
 
 
-#################
-# Dummy coding of a data frame of factor variables
+#' Dummy coding of a data frame of factor variables
+#'
+#' Given a data frame of factor variables, this function returns a numeric
+#' matrix of 0--1 dummy-coded variables.
+#'
 #' @export
+#' @param dat A data frame of factor variables
+#' @return A numeric matrix of 0--1 dummy coded variables
+#' @examples
+#' dd <- data.frame(a=factor(1:8), b=factor(letters[1:8]))
+#' dummyCodeFactorDf(dd)
 dummyCodeFactorDf <- function(dat) {
   catTypes <- sapply(dat,class)
   if (!all(catTypes=='factor')) {
     stop('Input data frame must have only factor variables.')
   }
-  Reduce(cbind,lapply(dat,dummyCodeOneVar))
+  outMat <- Reduce(cbind,lapply(dat,dummyCodeOneVar))
+  levNames <- lapply(dat,levels)
+  colnames(outMat) <- paste(
+    rep(colnames(dat), times=lapply(levNames,length)),
+    unlist(levNames),
+    sep = '_'
+  )
+  return(outMat)
 }
 
 
@@ -129,7 +144,48 @@ withinClusterDist <- function(dat,centroids,distFun,memberships) {
 # 1 - conWeight.
 # ... optional arguments passed to kmeans. An input argument of 'centers' is
 # ignored.
+
+#' Weighted k-means for mixed-type data
+#'
+#' Weighted k-means for mixed continuous and categorical variables. A 
+#' user-specified weight \code{conWeight} controls the relative contribution of the
+#' variable types to the cluster solution.
+#'
+#' A simple adaptation of \code{stats::kmeans} to mixed-type data.  Continuous
+#' variables are multiplied by the input parameter \code{conWeight}, and categorical
+#' variables are multipled by \code{1-conWeight}. If factor variables are input to
+#' \code{catData}, they are transformed to 0-1 dummy coded variables with the function
+#' \code{dummyCodeFactorDf}.
+#'
 #' @export
+#' @param conData The continuous variables. Must be coercible to a data frame.
+#' @param catData The categorical variables, either as factors or dummy-coded variables. Must be coercible to a data frame.
+#' @param conWeight The continuous weight; must be between 0 and 1. The categorical weight is \code{1-conWeight}.
+#' @param nclust The number of clusters.
+#' @param ... Optional arguments passed to \code{kmeans}.
+#' @return A stats::kmeans results object, with additional slots \code{conCenters} and \code{catCenters} giving the actual centers adjusted for the weighting process.
+#' @seealso \code{\link{dummyCodeFactorDf}}
+#' @seealso \code{\link[stats]{kmeans}}
+#' @examples
+#' # Generate toy data set with poor quality categorical variables and good
+#' # quality continuous variables.
+#' set.seed(1)
+#' dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
+#'   nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
+#' catDf <- data.frame(apply(dat$catVars, 2, factor))
+#' conDf <- data.frame(scale(dat$conVars))
+#'
+#' # A clustering that emphasizes the continuous variables
+#' r1 <- with(dat,wkmeans(conDf, catDf, 0.9, 2))
+#' table(r1$cluster, dat$trueID)
+#'
+#' # A clustering that emphasizes the categorical variables; note argument
+#' # passed to the underlying stats::kmeans function
+#' r2 <- with(dat,wkmeans(conDf, catDf, 0.1, 2, nstart=4))
+#' table(r2$cluster, dat$trueID)
+
+
+
 wkmeans <- function(
   conData,
   catData,
@@ -175,202 +231,6 @@ wkmeans <- function(
   return(clustRes)
 }
 
-
-#' A general implementation of Modha-Spangler clustering for mixed-type data.
-#'
-#' Modha-Spangler clustering estimates the optimal weighting for continuous
-#' vs categorical variables using a brute-force search strategy.
-#'
-#' Modha-Spangler clustering uses a brute-force search strategy to estimate
-#' the optimal weighting for continuous vs categorical variables. This
-#' implementation admits an arbitrary clustering function and arbitrary
-#' objective functions for continuous and categorical variables.
-#' 
-#' The input parameter clustFun must be a function accepting inputs 
-#' (conData, catData, conWeight, nclust, ...) and returning a list containing
-#' (at least) the elements cluster, conCenters, and catCenters. The list element
-#' "cluster" contains cluster memberships denoted by the integers 1:nclust. The
-#' list elements "conCenters" and "catCenters" must be data frames whose rows
-#' denote cluster centroids. The function clustFun must allow nclust = 1, in
-#' which case $centers returns a data frame with a single row.
-#' Input parameters conDist and catDist are functions that must each take two
-#' data frame rows as input and return a scalar distance measure.
-#' @export
-#' @param conData A data frame of continuous variables.
-#' @param catData A data frame of categorical variables; the allowable variable types depend on the specific clustering function used.
-#' @param nclust An integer specifying the number of clusters.
-#' @param searchDensity An integer determining the number of distinct cluster weightings evaluated in the brute-force search.
-#' @param clustFun The clustering function to be applied.
-#' @param conDist The continuous distance function used to construct the objective function.
-#' @param catDist The categorical distance function used to construct the objective function.
-gmsClust <- function(
-  conData,
-  catData,
-  nclust,
-  searchDensity = 10,
-  clustFun = wkmeans,
-  conDist = squaredEuc,
-  catDist = squaredEuc,
-  ...
-  ) {
-  # variable tests
-  conData <- as.data.frame(conData)
-  catData <- as.data.frame(catData)
-  
-  # initializations
-  bestObj <- Inf
-  weights <- seq(
-    from = 1/(1+searchDensity),
-    to = 1 - 1/(1+searchDensity),
-    by = 1/(1+searchDensity)
-  )
-  objFun <- rep(NaN,length(weights))
-  Qcon <- rep(NaN,length(weights))
-  Qcat <- rep(NaN,length(weights))
-  nullConClustering <- clustFun(
-    conData = conData,
-    catData = rep(catData[1,1], nrow(catData)),
-    conWeight = 1,
-    nclust = 1,
-    ...
-  )
-  nullCatClustering <- clustFun(
-    conData = rep(conData[1,1], nrow(conData)),
-    catData = catData,
-    conWeight = 0,
-    nclust = 1,
-    ...
-  )
-  totalConDist <- sum(distFromData2Centroid(
-    dat=conData,
-    centroid=nullConClustering$conCenters,
-    distFun = conDist
-  ))
-  totalCatDist <- sum(distFromData2Centroid(
-    dat=catData,
-    centroid=nullCatClustering$catCenters,
-    distFun = catDist
-  ))
-  for (i in 1:length(weights)) {
-    currentClustering <- clustFun(
-      conData=conData,
-      catData=catData,
-      conWeight=weights[i],
-      nclust=nclust,
-      ...
-    )
-    withinConDist <- withinClusterDist(
-      conData,
-      centroids = currentClustering$conCenters,
-      distFun = conDist,
-      memberships = currentClustering$cluster
-    )
-    withinCatDist <- withinClusterDist(
-      catData,
-      centroids = currentClustering$catCenters,
-      distFun = catDist,
-      memberships = currentClustering$cluster
-    )
-    Qcon[i] <- withinConDist / (totalConDist - withinConDist)
-    Qcat[i] <- withinCatDist / (totalCatDist - withinCatDist)
-    # If w/in cluster distortion is worse than total distortion,
-    # the clustering is "infinitely" bad.
-    if (Qcon[i] < 0) Qcon[i] <- Inf
-    if (Qcat[i] < 0) Qcat[i] <- Inf
-    objFun[i] <- Qcon[i] * Qcat[i]
-    if (i==1 || objFun[i] < bestObj) {
-      bestInd <- i
-      bestObj <- objFun[i]
-      bestRes <- currentClustering
-    }
-  }
-  if (any(objFun==0)) {
-    warning('At least one entry of zero in the objective function; 
-    is nclust >= the number of categorical variable 
-    level combinations?')
-  }
-  return(list(
-    results = bestRes,
-    objFun = objFun,
-    Qcon = Qcon,
-    Qcat = Qcat,
-    bestInd = bestInd,
-    weights = weights
-  ))
-}
-
-
-#################
-## Modha & Spangler optimal weight clustering
-## Note that categorical data should be factors
-#owClust <- function(conData,categFact,samplingInt=0.1,centers,iter.max,nstart) {
-#  numUnique <- unique(cbind(conData,categFact))
-#  if (nrow(numUnique) < centers) {
-#    stop('more cluster centers than distinct data points.')
-#  }
-#  ncon <- ncol(conData)
-#  ncat <- ncol(categFact)
-#  conData <- scale(conData)
-#  conDataDf <- as.data.frame(conData)
-#  catDum1 <- Reduce(cbind,lapply(categFact,dummyCodeOneVar))
-#
-#  #print(head(catDum1))
-#  #print(dist(head(catDum1))^2)
-#
-#  catDum2 <- catDum1 / sqrt(ncat/2)
-#  ndum <- ncol(catDum2)
-#
-#  alphas <- seq(0,1,by=samplingInt)
-#  alphas <- alphas[-c(1,length(alphas))]
-#  objFun <- rep(NaN,length(alphas))
-#  Qcon <- rep(NaN,length(alphas))
-#  Qcat <- rep(NaN,length(alphas))
-#
-#  totConDist <- sumDistEuc(conData)
-#  totCatDist <- sumDistSph(catDum2)
-#
-#  for (i in 1:length(alphas)) {
-#    # run ith kmeans
-#    currentKmRes <- kmeans(
-#      x = cbind(
-#        alphas[i]*conData
-#       ,(1-alphas[i])*catDum1
-#      )
-#     ,centers = centers
-#     ,iter.max = iter.max
-#     ,nstart = nstart
-#     ,algorithm = 'Hartigan-Wong'
-#    )
-#    # calculate continuous distortion
-#    wnConDistDf <- ddply(
-#      .data=cbind(as.data.frame(conDataDf),ind=factor(currentKmRes$cluster))
-#     ,~ind
-#     ,function(dd) data.frame(dist=sumDistEuc(as.matrix(dd[-(1+ncon)])))
-#    )
-#    wnConDist <- sum(wnConDistDf$dist)
-#    bwConDist <- totConDist - wnConDist
-#
-#    # calculate categorical distortion
-#    wnCatDistDf <- ddply(
-#      .data=cbind(as.data.frame(catDum2),ind=factor(currentKmRes$cluster))
-#     ,~ind
-#     ,function(dd) data.frame(dist=sumDistSph(as.matrix(dd[-(1+ndum)])))
-#    )
-#    wnCatDist <- sum(wnCatDistDf$dist)
-#    bwCatDist <- totCatDist - wnCatDist
-#    Qcon[i] <- wnConDist/bwConDist
-#    Qcat[i] <- wnCatDist/bwCatDist
-#    objFun[i] <- Qcon[i] * Qcat[i]
-#    if (objFun[i] < 0) objFun[i] <- Inf
-#
-#    if (i==1 || objFun[i] < bestObj) {
-#      bestInd <- i
-#      bestObj <- objFun[i]
-#      bestRes <- currentKmRes
-#    }
-#  }
-#  return(list(res=bestRes,objFun=objFun,Qcon=Qcon,Qcat=Qcat,bestInd=bestInd,alphas=alphas))
-#}
 
 #################
 # define a function that maps clusters
