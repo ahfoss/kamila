@@ -35,6 +35,7 @@
 #' \item{bestInd}{The index of the most successful run}
 #' \item{weights}{A numeric vector of length \code{searchDensity} containing the continuous weights used}
 #' @examples
+#' \dontrun{
 #' # Generate toy data set with poor quality categorical variables and good
 #' # quality continuous variables.
 #' set.seed(1)
@@ -46,6 +47,7 @@
 #' msRes <- gmsClust(conDf, catDf, nclust=2)
 #'
 #' table(msRes$results$cluster, dat$trueID)
+#' }
 gmsClust <- function(
   conData,
   catData,

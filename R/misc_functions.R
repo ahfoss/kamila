@@ -158,6 +158,7 @@ withinClusterDist <- function(dat,centroids,distFun,memberships) {
 #' \code{dummyCodeFactorDf}.
 #'
 #' @export
+#' @importFrom stats kmeans
 #' @param conData The continuous variables. Must be coercible to a data frame.
 #' @param catData The categorical variables, either as factors or dummy-coded variables. Must be coercible to a data frame.
 #' @param conWeight The continuous weight; must be between 0 and 1. The categorical weight is \code{1-conWeight}.
@@ -183,9 +184,6 @@ withinClusterDist <- function(dat,centroids,distFun,memberships) {
 #' # passed to the underlying stats::kmeans function
 #' r2 <- with(dat,wkmeans(conDf, catDf, 0.1, 2, nstart=4))
 #' table(r2$cluster, dat$trueID)
-
-
-
 wkmeans <- function(
   conData,
   catData,

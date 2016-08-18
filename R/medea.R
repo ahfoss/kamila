@@ -34,6 +34,7 @@ setArgs <- function(input, name, default) {
 
 
 # helper function for medea with famd option
+#' @importFrom stats lm anova model.matrix
 propVar <- function(X1,X2) {
   if (is.numeric(X1) && is.numeric(X2)) {
     depVar <- scale(X1)
@@ -118,6 +119,7 @@ propVarAssocMat <- function(dat) {
 # @param ... Optional input to the discretization function.
 # @return A list containing a vector \code{wgts} of variable-specific weights with
 # length equal to \code{ncol(dat)}.
+#' @importFrom stats quantile
 medeaWgts <- function(
   dat,
   discretizationMethod='kmeans',

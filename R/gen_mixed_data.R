@@ -17,6 +17,7 @@
 #' NOTE: Currently, only two populations (clusters) are supported.
 #'
 #' @export
+#' @importFrom stats qnorm rnorm
 #' @param sampSize Integer: Size of the simulated data set.
 #' @param nConVar The number of continuous variables.
 #' @param nCatVar The number of categorical variables.

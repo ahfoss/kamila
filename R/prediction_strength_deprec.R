@@ -26,6 +26,7 @@ prediction.strength <- function(testClustering, classifyTest) {
 
 
 # Function to classify new observations given kmeans results object 
+#' @importFrom stats mahalanobis
 classify.kmeans <- function(res,newData) {
   centers <- res$centers
   kk <- nrow(centers)

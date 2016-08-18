@@ -46,7 +46,7 @@ myCatKern <- function(kdat,bw,tabOnly=TRUE) {
       l1[[i]] <- rotatedMat
     }
     l1$along <- dd
-    offCounts <- do.call(abind,l1)
+    offCounts <- do.call(abind::abind,l1)
     offCounts  <- offCounts - tt
     tt <- (1-bw[dd])*tt + bw[dd]/(dims[dd]-1)*offCounts
   }
@@ -64,7 +64,7 @@ myCatKern <- function(kdat,bw,tabOnly=TRUE) {
 
 ############
 # function for initializing means
-initMeans <- function(conVar,method=conInitMethod,numClust) {
+initMeans <- function(conVar,method,numClust) {
   if (method=='sample') {
     return(
       sapply(conVar,function(xx) sample(xx,size=numClust,replace=TRUE))
@@ -156,6 +156,7 @@ psort <- function(xx,pp) {
 # then evaluates at given vector of points
 # pdim is the number of continuous variables used
 # returnFun causes a resampling function to be returned
+#' @importFrom stats bw.nrd0 approxfun
 radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
   MAXDENS <- 1
   # Note using a chosen constant for bw reduces time by about 7%
@@ -271,6 +272,7 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' determining the number of clusters. The smaller the threshold, the larger
 #' the number of clusters selected.
 #' @export
+#' @importFrom stats runif sd setNames
 #' @param conVar A data frame of continuous variables.
 #' @param catFactor A data frame of factors.
 #' @param numClust The number of clusters returned by the algorithm.

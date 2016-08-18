@@ -54,6 +54,7 @@ Input parameters conDist and catDist are functions that must each take two
 data frame rows as input and return a scalar distance measure.
 }
 \examples{
+\dontrun{
 # Generate toy data set with poor quality categorical variables and good
 # quality continuous variables.
 set.seed(1)
@@ -65,5 +66,6 @@ conDf <- data.frame(scale(dat$conVars))
 msRes <- gmsClust(conDf, catDf, nclust=2)
 
 table(msRes$results$cluster, dat$trueID)
+}
 }
 
