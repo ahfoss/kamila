@@ -1,5 +1,5 @@
 
-# kamila
+# kamila [![Build status](https://ci.appveyor.com/api/projects/status/96ucgsr93ok90aux?svg=true)](https://ci.appveyor.com/project/ahfoss/kamila)
 =======
 R package for clustering mixed data. For more information, run
 
