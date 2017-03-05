@@ -8,13 +8,17 @@
 #' structure. Continuous variables follow a normal mixture model, and
 #' categorical variables follow a multinomial mixture model. Overlap of the
 #' continuous and categorical variables (i.e. how clear the cluster structure
-#' is) can be manipulated by the user. The default overlap level is 1 percent
-#' (i.e. almost perfect separation), and a user-specified number of continuous
-#' and categorical variables can be specified to be measured with error, in
-#' which case the overlap can be selectively set to be anywhere within 1 and
-#' 100 percent (100 percent corresponds to complete overlap).
-#'
-#' NOTE: Currently, only two populations (clusters) are supported.
+#' is) can be manipulated by the user. Overlap between two clusters is the area
+#' of the overlapping region defined by their densities (or, for categorical
+#' variables, the summed height of overlapping segments defined by their point
+#' masses). The default overlap level is 0.01 (i.e. almost perfect separation).
+#' A user-specified number of continuous and categorical variables can be
+#' specified to be "error variables" with arbitrary overlap within 0.01 and 1.00
+#' (where 1.00 corresponds to complete overlap).
+#' NOTE: Currently, only two populations (clusters) are supported. While exact
+#' control of overlap between two clusters is straightforward, controlling the
+#' overlap between the K choose 2 pairwise combinations of clusters is a more
+#' difficult task.
 #'
 #' @export
 #' @importFrom stats qnorm rnorm
