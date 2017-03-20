@@ -300,12 +300,13 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' # Generate toy data set with poor quality categorical variables and good
 #' # quality continuous variables.
 #' set.seed(1)
-#' dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
-#'   nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
+#' dat <- genMixedData(200, nConVar = 2, nCatVar = 2, nCatLevels = 4,
+#'   nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5, .5),
+#'   conErrLev = 0.3, catErrLev = 0.8)
 #' catDf <- data.frame(apply(dat$catVars, 2, factor))
 #' conDf <- data.frame(scale(dat$conVars))
 #'
-#' kamRes <- kamila(conDf, catDf, numClust=2, numInit=10)
+#' kamRes <- kamila(conDf, catDf, numClust = 2, numInit = 10)
 #'
 #' table(kamRes$finalMemb, dat$trueID)
 
@@ -879,7 +880,9 @@ cyclicalCoding <- function(invar) {
 #' @examples
 #' # Generate toy data set
 #' set.seed(1234)
-#' dat1 <- genMixedData(400, nConVar = 2, nCatVar = 2, nCatLevels = 4, nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5,.5), conErrLev = 0.2, catErrLev = 0.2)
+#' dat1 <- genMixedData(400, nConVar = 2, nCatVar = 2, nCatLevels = 4,
+#'   nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5,.5),
+#'   conErrLev = 0.2, catErrLev = 0.2)
 #' # Partition the data into training/test set
 #' trainingIds <- sample(nrow(dat1$conVars), size = 300, replace = FALSE)
 #' catTrain <- data.frame(apply(dat1$catVars[trainingIds,], 2, factor))
@@ -892,7 +895,7 @@ cyclicalCoding <- function(invar) {
 #' # Predict membership in the test data set
 #' kamilaPred <- classifyKamila(kamilaObj, list(conTest, catTest))
 #' table(dat1$trueID[-trainingIds], kamilaPred)
-classifyKamila <- function(obj,newData) {
+classifyKamila <- function(obj, newData) {
   #if (length(newData) == 3) {
   #  cyclicRecoded <- as.data.frame(lapply(newData[[3]],cyclicalCoding))
   #  newCon <- as.data.frame(cbind(newData[[1]],cyclicRecoded))

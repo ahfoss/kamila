@@ -28,7 +28,9 @@ to construct the kamila clustering.
 \examples{
 # Generate toy data set
 set.seed(1234)
-dat1 <- genMixedData(400, nConVar = 2, nCatVar = 2, nCatLevels = 4, nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5,.5), conErrLev = 0.2, catErrLev = 0.2)
+dat1 <- genMixedData(400, nConVar = 2, nCatVar = 2, nCatLevels = 4,
+  nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5,.5),
+  conErrLev = 0.2, catErrLev = 0.2)
 # Partition the data into training/test set
 trainingIds <- sample(nrow(dat1$conVars), size = 300, replace = FALSE)
 catTrain <- data.frame(apply(dat1$catVars[trainingIds,], 2, factor))
