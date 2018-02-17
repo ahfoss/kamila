@@ -309,6 +309,7 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' kamRes <- kamila(conDf, catDf, numClust = 2, numInit = 10)
 #'
 #' table(kamRes$finalMemb, dat$trueID)
+#' @references Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
 
 kamila <- function(
   conVar
@@ -895,6 +896,7 @@ cyclicalCoding <- function(invar) {
 #' # Predict membership in the test data set
 #' kamilaPred <- classifyKamila(kamilaObj, list(conTest, catTest))
 #' table(dat1$trueID[-trainingIds], kamilaPred)
+#' @references Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
 classifyKamila <- function(obj, newData) {
   #if (length(newData) == 3) {
   #  cyclicRecoded <- as.data.frame(lapply(newData[[3]],cyclicalCoding))

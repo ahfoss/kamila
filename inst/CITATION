@@ -1,0 +1,18 @@
+bibentry(bibtype = "Article",
+  title        = "{kamila}: Clustering Mixed-Type Data in {R} and {Hadoop}",
+  author       = c(person(given = c("Alexander", "H."),
+                          family = "Foss",
+                          email = "ahfoss@buffalo.edu"),
+                   person(given = "Marianthi",
+                          family = "Markatou",
+                          email = "markatou@buffalo.edu")),
+  journal      = "Journal of Statistical Software",
+  year         = "2018",
+  volume       = "83",
+  number       = "13",
+  pages        = "1--45",
+  doi          = "10.18637/jss.v083.i13",
+
+  header       = "To cite kamila in publications use:"
+)
+

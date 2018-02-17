@@ -44,4 +44,6 @@ table(dat1$trueID[trainingIds], kamilaObj$finalMemb)
 kamilaPred <- classifyKamila(kamilaObj, list(conTest, catTest))
 table(dat1$trueID[-trainingIds], kamilaPred)
 }
-
+\references{
+Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
+}

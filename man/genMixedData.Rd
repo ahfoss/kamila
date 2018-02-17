@@ -63,4 +63,3 @@ dat <- genMixedData(100, 2, 2, nCatLevels=4, nConWithErr=1, nCatWithErr=1,
 with(dat,plot(conVars,col=trueID))
 with(dat,table(data.frame(catVars[,1:2],trueID)))
 }
-

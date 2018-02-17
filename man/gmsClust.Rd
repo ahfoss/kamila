@@ -68,4 +68,8 @@ msRes <- gmsClust(conDf, catDf, nclust=2)
 table(msRes$results$cluster, dat$trueID)
 }
 }
+\references{
+Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
 
+Modha DS, Spangler WS; Feature Weighting in k-Means Clustering. Machine Learning, 52(3). 2003. doi: 10.1023/a:1024016609528
+}

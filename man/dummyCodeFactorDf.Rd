@@ -20,4 +20,3 @@ matrix of 0--1 dummy-coded variables.
 dd <- data.frame(a=factor(1:8), b=factor(letters[1:8]))
 dummyCodeFactorDf(dd)
 }
-

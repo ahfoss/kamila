@@ -55,4 +55,3 @@ table(r2$cluster, dat$trueID)
 
 \code{\link[stats]{kmeans}}
 }
-

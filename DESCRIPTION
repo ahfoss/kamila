@@ -1,6 +1,6 @@
 Package: kamila
 Type: Package
-Version: 0.1.1.1
+Version: 0.1.1.2
 Date: 2016-08-18
 Authors@R: c(
     person("Alexander", "Foss", email = "alexanderhfoss@gmail.com",
@@ -40,4 +40,4 @@ Suggests:
     clustMD,
     ggplot2,
     Hmisc
-RoxygenNote: 5.0.1
+RoxygenNote: 6.0.1
