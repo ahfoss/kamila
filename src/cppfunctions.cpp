@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 using namespace Rcpp;
 
+// https://github.com/RcppCore/Rcpp/issues/636
 void R_init_kamila(DllInfo* info) {
   R_registerRoutines(info, NULL, NULL, NULL, NULL);
   R_useDynamicSymbols(info, TRUE);
