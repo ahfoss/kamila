@@ -156,7 +156,7 @@ psort <- function(xx,pp) {
 # then evaluates at given vector of points
 # pdim is the number of continuous variables used
 # returnFun causes a resampling function to be returned
-#' @importFrom stats bw.nrd0 approxfun
+#' @importFrom stats bw.nrd0 approxfun quantile
 radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
   MAXDENS <- 1
   # Note using a chosen constant for bw reduces time by about 7%
