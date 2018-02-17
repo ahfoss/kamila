@@ -23,7 +23,7 @@ Description: Implements methods for clustering mixed-type data,
   continuous and categorical variables.
 Depends:
     R (>= 3.0.0)
-License: GPL-3
+License: GPL-3 | file LICENSE
 URL: https://github.com/ahfoss/kamila
 BugReports: https://github.com/ahfoss/kamila/issues
 Imports:
