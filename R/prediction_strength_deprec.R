@@ -73,68 +73,68 @@ cyclicalCoding <- function(invar) {
 }
 
 
-# wrapper for kamila + medea functions for passing into nclust1x
-# Note that \code{dat} is a 3-element list with continuous variables as first
-# element, categorical as 2nd, and optional cyclical variables as 3rd.
-# Cyclical variables must be coded as factors, unit circle recoding
-# is done automatically.
-# All variable components must be data frames.
-# If no cyclical variables, then leave third position empty.
-# Note that return object must have memberships listed in field "cluster"
-kamilaMedeaMethod <- function(dat,k) {
-  numConVar <- ncol(dat[[1]])
-  numCatVar <- ncol(dat[[2]])
-  if (length(dat) == 3) {
-    cyclicVarPresent <- TRUE
-    numCycVar <- ncol(dat[[3]])
-  } else if (length(dat) == 2) {
-    cyclicVarPresent <- FALSE
-    numCycVar <- NA
-  } else {
-    stop('Error in function kamilaMedeaMethod: data must be list of length 2 or 3')
-  }
-
-  if (cyclicVarPresent) {
-    # convert cyc vars from int to factor for MEDEA
-    cycFactors <- dat[[3]]
-    for (i in 1:numCycVar) cycFactors[,i] <- factor(dat[[3]][,i])
-    medeaVar <- as.data.frame(cbind(dat[[1]],dat[[2]],cycFactors))
-    # convert cyc vars from int to numerically coded for KAMILA
-    cyclicRecoded <- as.data.frame(lapply(dat[[3]],cyclicalCoding))
-    kamilaConVar <- as.data.frame(cbind(dat[[1]],cyclicRecoded))
-    # match up indices of medea weights with variables as input into kamila function
-    kamilaConWeightInds <- c(
-      1:numConVar
-     ,rep(
-        (1+numConVar+numCatVar):(numConVar+numCatVar+numCycVar)
-       ,each=2
-      )
-    )
-  } else {
-    medeaVar <- as.data.frame(cbind(dat[[1]],dat[[2]]))
-    kamilaConVar <- as.data.frame(dat[[1]])
-    kamilaConWeightInds <- 1:numConVar
-  }
-
-
-  medeaTmp <- medeaWgts(
-    dat = medeaVar
-   ,associationMethod = 'famd'
-   ,verbosity=FALSE
-  )
-
-  res <- kamila(
-    conVar = kamilaConVar
-   ,catFactor = dat[[2]]
-   ,numClust = k
-   ,numInit = 10
-   ,conWeights = medeaTmp$wgts[kamilaConWeightInds]
-   ,catWeights = medeaTmp$wgts[(numConVar+1):(numConVar+numCatVar)]
-  )
-
-  res$cluster <- res$finalMemb
-  return(res)
-}
+## wrapper for kamila + medea functions for passing into nclust1x
+## Note that \code{dat} is a 3-element list with continuous variables as first
+## element, categorical as 2nd, and optional cyclical variables as 3rd.
+## Cyclical variables must be coded as factors, unit circle recoding
+## is done automatically.
+## All variable components must be data frames.
+## If no cyclical variables, then leave third position empty.
+## Note that return object must have memberships listed in field "cluster"
+#kamilaMedeaMethod <- function(dat,k) {
+#  numConVar <- ncol(dat[[1]])
+#  numCatVar <- ncol(dat[[2]])
+#  if (length(dat) == 3) {
+#    cyclicVarPresent <- TRUE
+#    numCycVar <- ncol(dat[[3]])
+#  } else if (length(dat) == 2) {
+#    cyclicVarPresent <- FALSE
+#    numCycVar <- NA
+#  } else {
+#    stop('Error in function kamilaMedeaMethod: data must be list of length 2 or 3')
+#  }
+#
+#  if (cyclicVarPresent) {
+#    # convert cyc vars from int to factor for MEDEA
+#    cycFactors <- dat[[3]]
+#    for (i in 1:numCycVar) cycFactors[,i] <- factor(dat[[3]][,i])
+#    medeaVar <- as.data.frame(cbind(dat[[1]],dat[[2]],cycFactors))
+#    # convert cyc vars from int to numerically coded for KAMILA
+#    cyclicRecoded <- as.data.frame(lapply(dat[[3]],cyclicalCoding))
+#    kamilaConVar <- as.data.frame(cbind(dat[[1]],cyclicRecoded))
+#    # match up indices of medea weights with variables as input into kamila function
+#    kamilaConWeightInds <- c(
+#      1:numConVar
+#     ,rep(
+#        (1+numConVar+numCatVar):(numConVar+numCatVar+numCycVar)
+#       ,each=2
+#      )
+#    )
+#  } else {
+#    medeaVar <- as.data.frame(cbind(dat[[1]],dat[[2]]))
+#    kamilaConVar <- as.data.frame(dat[[1]])
+#    kamilaConWeightInds <- 1:numConVar
+#  }
+#
+#
+#  medeaTmp <- medeaWgts(
+#    dat = medeaVar
+#   ,associationMethod = 'famd'
+#   ,verbosity=FALSE
+#  )
+#
+#  res <- kamila(
+#    conVar = kamilaConVar
+#   ,catFactor = dat[[2]]
+#   ,numClust = k
+#   ,numInit = 10
+#   ,conWeights = medeaTmp$wgts[kamilaConWeightInds]
+#   ,catWeights = medeaTmp$wgts[(numConVar+1):(numConVar+numCatVar)]
+#  )
+#
+#  res$cluster <- res$finalMemb
+#  return(res)
+#}
 
 # function for subsetting matrix of continuous variables
 #

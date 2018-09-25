@@ -32,7 +32,6 @@ Imports:
     KernSmooth,
     gtools,
     Rcpp,
-    mclust,
     plyr
 LinkingTo: Rcpp
 Suggests:
