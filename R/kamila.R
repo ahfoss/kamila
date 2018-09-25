@@ -123,6 +123,17 @@ distPointsToMeans <- function(pts,myMeans,wgts) {
 
 ##########################
 # Rcpp implementation of the above function
+##########################
+#' Calculate distances from a set of points to a set of centroids
+#'
+#' A function that calculates a NxM matrix of distances between a NxP set of
+#' points and a MxP set of points.
+#'
+#' @export
+#' @param pts A matrix of points
+#' @param myMeans A matrix of centroids, must have same ncol as pts
+#' @param wgts A Px1 vector of variable weights
+#' @return A MxP matrix of distances
 dptmCpp <- function(pts,myMeans,wgts) {
   pts <- as.matrix(pts)
   ppDim <- ncol(pts)

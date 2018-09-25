@@ -4,8 +4,9 @@
 \alias{gmsClust}
 \title{A general implementation of Modha-Spangler clustering for mixed-type data.}
 \usage{
-gmsClust(conData, catData, nclust, searchDensity = 10, clustFun = wkmeans,
-  conDist = squaredEuc, catDist = squaredEuc, ...)
+gmsClust(conData, catData, nclust, searchDensity = 10,
+  clustFun = wkmeans, conDist = squaredEuc, catDist = squaredEuc,
+  ...)
 }
 \arguments{
 \item{conData}{A data frame of continuous variables.}

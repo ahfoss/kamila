@@ -4,8 +4,8 @@
 \alias{genMixedData}
 \title{Generate simulated mixed-type data with cluster structure.}
 \usage{
-genMixedData(sampSize, nConVar, nCatVar, nCatLevels, nConWithErr, nCatWithErr,
-  popProportions, conErrLev, catErrLev)
+genMixedData(sampSize, nConVar, nCatVar, nCatLevels, nConWithErr,
+  nCatWithErr, popProportions, conErrLev, catErrLev)
 }
 \arguments{
 \item{sampSize}{Integer: Size of the simulated data set.}
