@@ -2,6 +2,7 @@ library(kamila)
 context('KAMILA clustering')
 
 test_that('KAMILA runs as expected, small data set', {
+  suppressWarnings(RNGversion("3.5.0"))
   set.seed(1)
   res1 <- kamila(
     conVar = data.frame(rnorm(15)),

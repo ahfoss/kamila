@@ -2,6 +2,7 @@ library(kamila)
 context('Modha-Spangler clustering')
 
 test_that('gmsClust runs as expected, small data set', {
+  suppressWarnings(RNGversion("3.5.0"))
   set.seed(1)
   res1 <- gmsClust(
     conData = data.frame(rnorm(15),rnorm(15)),
