@@ -20,7 +20,9 @@ Description: Implements methods for clustering mixed-type data,
   dummy coding of variables, and is efficient enough to scale to rather large
   data sets. Also implemented is Modha-Spangler clustering, which uses a
   brute-force strategy to maximize the cluster separation simultaneously in the
-  continuous and categorical variables.
+  continuous and categorical variables. For more information, see Foss, Markatou,
+  Ray, & Heching (2016) <doi:10.1007/s10994-016-5575-7> and Foss & Markatou
+  (2018) <doi:10.18637/jss.v083.i13>.
 Depends:
     R (>= 3.0.0)
 License: GPL-3 | file LICENSE
