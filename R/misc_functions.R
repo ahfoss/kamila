@@ -28,7 +28,7 @@ dummyCodeOneVar <- function(fac) {
 #' @param dat A data frame of factor variables
 #' @return A numeric matrix of 0--1 dummy coded variables
 #' @examples
-#' dd <- data.frame(a=factor(1:8), b=factor(letters[1:8]))
+#' dd <- data.frame(a=factor(1:8), b=factor(letters[1:8]), stringsAsFactors = TRUE, stringsAsFactors = TRUE)
 #' dummyCodeFactorDf(dd)
 dummyCodeFactorDf <- function(dat) {
   catTypes <- sapply(dat,class)
@@ -93,7 +93,7 @@ withinClusterDist <- function(dat,centroids,distFun,memberships) {
       dat=data.frame(dd[,-ncol(dd)]),
       centroid=data.frame(centroids[dd$clust_uNiQuE[1],]),
       distFun=distFun
-    )))
+    )), stringsAsFactors = TRUE)
   )
   return(sum(clusterDists$dist))
 }
@@ -173,8 +173,8 @@ withinClusterDist <- function(dat,centroids,distFun,memberships) {
 #' set.seed(1)
 #' dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
 #'   nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
-#' catDf <- data.frame(apply(dat$catVars, 2, factor))
-#' conDf <- data.frame(scale(dat$conVars))
+#' catDf <- data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE)
+#' conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE)
 #'
 #' # A clustering that emphasizes the continuous variables
 #' r1 <- with(dat,wkmeans(conDf, catDf, 0.9, 2))

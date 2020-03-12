@@ -41,8 +41,8 @@
 #' set.seed(1)
 #' dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
 #'   nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
-#' catDf <- dummyCodeFactorDf(data.frame(apply(dat$catVars, 2, factor)))
-#' conDf <- data.frame(scale(dat$conVars))
+#' catDf <- dummyCodeFactorDf(data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE, stringsAsFactors = TRUE))
+#' conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE, stringsAsFactors = TRUE)
 #'
 #' msRes <- gmsClust(conDf, catDf, nclust=2)
 #'
@@ -192,7 +192,7 @@ gmsClust <- function(
 #    wnConDistDf <- ddply(
 #      .data=cbind(as.data.frame(conDataDf),ind=factor(currentKmRes$cluster))
 #     ,~ind
-#     ,function(dd) data.frame(dist=sumDistEuc(as.matrix(dd[-(1+ncon)])))
+#     ,function(dd) data.frame(dist=sumDistEuc(as.matrix(dd[-(1+ncon)])), stringsAsFactors = TRUE)
 #    )
 #    wnConDist <- sum(wnConDistDf$dist)
 #    bwConDist <- totConDist - wnConDist
@@ -201,7 +201,7 @@ gmsClust <- function(
 #    wnCatDistDf <- ddply(
 #      .data=cbind(as.data.frame(catDum2),ind=factor(currentKmRes$cluster))
 #     ,~ind
-#     ,function(dd) data.frame(dist=sumDistSph(as.matrix(dd[-(1+ndum)])))
+#     ,function(dd) data.frame(dist=sumDistSph(as.matrix(dd[-(1+ndum)])), stringsAsFactors = TRUE)
 #    )
 #    wnCatDist <- sum(wnCatDistDf$dist)
 #    bwCatDist <- totCatDist - wnCatDist

@@ -147,13 +147,13 @@ getSubsetMix <- function(dat,inds) {
   if (length(dat)==3) {
     return(list(
       dat[[1]][inds,]
-     ,data.frame(dat[[2]][inds,])
-     ,data.frame(dat[[3]][inds,])
+     ,data.frame(dat[[2]][inds,], stringsAsFactors = TRUE)
+     ,data.frame(dat[[3]][inds,], stringsAsFactors = TRUE)
     ))
   } else if (length(dat)==2) {
     return(list(
       dat[[1]][inds,]
-     ,data.frame(dat[[2]][inds,])
+     ,data.frame(dat[[2]][inds,], stringsAsFactors = TRUE)
     ))
   } else {
     stop('Error in function getSubsetMix: data must be list of length 2 or 3')

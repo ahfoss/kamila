@@ -43,7 +43,7 @@
 #' dat <- genMixedData(100, 2, 2, nCatLevels=4, nConWithErr=1, nCatWithErr=1,
 #'   popProportions=c(0.3,0.7), conErrLev=0.3, catErrLev=0.2)
 #' with(dat,plot(conVars,col=trueID))
-#' with(dat,table(data.frame(catVars[,1:2],trueID)))
+#' with(dat,table(data.frame(catVars[,1:2],trueID, stringsAsFactors = TRUE)))
 genMixedData = function(
   sampSize
  ,nConVar
@@ -233,8 +233,8 @@ return(
    ,trueMus = trueMus
    ,conVars = conVars
    ,errVariance = errVariance
-   ,popProbsNoErr = data.frame(popProb1=popProb1,popProb2=popProb2)
-   ,popProbsWithErr = data.frame(popProb1Err=popProb1Err,popProb2Err=popProb2Err)
+   ,popProbsNoErr = data.frame(popProb1=popProb1,popProb2=popProb2, stringsAsFactors = TRUE)
+   ,popProbsWithErr = data.frame(popProb1Err=popProb1Err,popProb2Err=popProb2Err, stringsAsFactors = TRUE)
    ,catVars = catVars
   )
 )
