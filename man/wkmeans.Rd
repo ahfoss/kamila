@@ -38,8 +38,8 @@ variables are multipled by \code{1-conWeight}. If factor variables are input to
 set.seed(1)
 dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
   nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
-catDf <- data.frame(apply(dat$catVars, 2, factor))
-conDf <- data.frame(scale(dat$conVars))
+catDf <- data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE)
+conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE)
 
 # A clustering that emphasizes the continuous variables
 r1 <- with(dat,wkmeans(conDf, catDf, 0.9, 2))

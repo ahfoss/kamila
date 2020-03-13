@@ -41,8 +41,8 @@
 #' set.seed(1)
 #' dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
 #'   nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
-#' catDf <- dummyCodeFactorDf(data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE, stringsAsFactors = TRUE))
-#' conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE, stringsAsFactors = TRUE)
+#' catDf <- dummyCodeFactorDf(data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE))
+#' conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE)
 #'
 #' msRes <- gmsClust(conDf, catDf, nclust=2)
 #'

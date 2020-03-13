@@ -4,10 +4,21 @@
 \alias{kamila}
 \title{KAMILA clustering of mixed-type data.}
 \usage{
-kamila(conVar, catFactor, numClust, numInit, conWeights = rep(1,
-  ncol(conVar)), catWeights = rep(1, ncol(catFactor)), maxIter = 25,
-  conInitMethod = "runif", catBw = 0.025, verbose = FALSE,
-  calcNumClust = "none", numPredStrCvRun = 10, predStrThresh = 0.8)
+kamila(
+  conVar,
+  catFactor,
+  numClust,
+  numInit,
+  conWeights = rep(1, ncol(conVar)),
+  catWeights = rep(1, ncol(catFactor)),
+  maxIter = 25,
+  conInitMethod = "runif",
+  catBw = 0.025,
+  verbose = FALSE,
+  calcNumClust = "none",
+  numPredStrCvRun = 10,
+  predStrThresh = 0.8
+)
 }
 \arguments{
 \item{conVar}{A data frame of continuous variables.}
@@ -89,8 +100,8 @@ set.seed(1)
 dat <- genMixedData(200, nConVar = 2, nCatVar = 2, nCatLevels = 4,
   nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5, .5),
   conErrLev = 0.3, catErrLev = 0.8)
-catDf <- data.frame(apply(dat$catVars, 2, factor))
-conDf <- data.frame(scale(dat$conVars))
+catDf <- data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE)
+conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE)
 
 kamRes <- kamila(conDf, catDf, numClust = 2, numInit = 10)
 

@@ -28,7 +28,7 @@ dummyCodeOneVar <- function(fac) {
 #' @param dat A data frame of factor variables
 #' @return A numeric matrix of 0--1 dummy coded variables
 #' @examples
-#' dd <- data.frame(a=factor(1:8), b=factor(letters[1:8]), stringsAsFactors = TRUE, stringsAsFactors = TRUE)
+#' dd <- data.frame(a=factor(1:8), b=factor(letters[1:8]), stringsAsFactors = TRUE)
 #' dummyCodeFactorDf(dd)
 dummyCodeFactorDf <- function(dat) {
   catTypes <- sapply(dat,class)

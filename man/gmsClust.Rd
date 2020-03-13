@@ -4,9 +4,16 @@
 \alias{gmsClust}
 \title{A general implementation of Modha-Spangler clustering for mixed-type data.}
 \usage{
-gmsClust(conData, catData, nclust, searchDensity = 10,
-  clustFun = wkmeans, conDist = squaredEuc, catDist = squaredEuc,
-  ...)
+gmsClust(
+  conData,
+  catData,
+  nclust,
+  searchDensity = 10,
+  clustFun = wkmeans,
+  conDist = squaredEuc,
+  catDist = squaredEuc,
+  ...
+)
 }
 \arguments{
 \item{conData}{A data frame of continuous variables.}
@@ -61,8 +68,8 @@ data frame rows as input and return a scalar distance measure.
 set.seed(1)
 dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
   nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
-catDf <- dummyCodeFactorDf(data.frame(apply(dat$catVars, 2, factor)))
-conDf <- data.frame(scale(dat$conVars))
+catDf <- dummyCodeFactorDf(data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE))
+conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE)
 
 msRes <- gmsClust(conDf, catDf, nclust=2)
 

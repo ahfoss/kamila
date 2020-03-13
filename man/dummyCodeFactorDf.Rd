@@ -17,6 +17,6 @@ Given a data frame of factor variables, this function returns a numeric
 matrix of 0--1 dummy-coded variables.
 }
 \examples{
-dd <- data.frame(a=factor(1:8), b=factor(letters[1:8]))
+dd <- data.frame(a=factor(1:8), b=factor(letters[1:8]), stringsAsFactors = TRUE)
 dummyCodeFactorDf(dd)
 }

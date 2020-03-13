@@ -1,11 +1,5 @@
 
 
-#library(abind)
-#library(KernSmooth) # for bkde
-#library(gtools) # for rdirichlet
-
-#' @import KernSmooth
-
 #############################
 # compile rcpp functions, including
 # - dptm, used in dptmCpp for calculating weighted Euc distances
@@ -20,6 +14,9 @@
 
 #' @useDynLib kamila
 #' @importFrom Rcpp sourceCpp
+#' @importFrom KernSmooth bkde
+#' @importFrom gtools rdirichlet
+#' @importFrom abind abind
 
 #tryCatch(
 #  sourceCpp("./src/cppfunctions.cpp")
@@ -172,7 +169,7 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
   MAXDENS <- 1
   # Note using a chosen constant for bw reduces time by about 7%
   radialBW <- bw.nrd0(radii)
-  radKDE <- KernSmooth::bkde(
+  radKDE <- bkde(
     x = radii
     ,kernel = "normal"
     ,bandwidth = radialBW

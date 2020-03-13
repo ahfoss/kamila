@@ -4,8 +4,17 @@
 \alias{genMixedData}
 \title{Generate simulated mixed-type data with cluster structure.}
 \usage{
-genMixedData(sampSize, nConVar, nCatVar, nCatLevels, nConWithErr,
-  nCatWithErr, popProportions, conErrLev, catErrLev)
+genMixedData(
+  sampSize,
+  nConVar,
+  nCatVar,
+  nCatLevels,
+  nConWithErr,
+  nCatWithErr,
+  popProportions,
+  conErrLev,
+  catErrLev
+)
 }
 \arguments{
 \item{sampSize}{Integer: Size of the simulated data set.}
@@ -61,5 +70,5 @@ difficult task.
 dat <- genMixedData(100, 2, 2, nCatLevels=4, nConWithErr=1, nCatWithErr=1,
   popProportions=c(0.3,0.7), conErrLev=0.3, catErrLev=0.2)
 with(dat,plot(conVars,col=trueID))
-with(dat,table(data.frame(catVars[,1:2],trueID)))
+with(dat,table(data.frame(catVars[,1:2],trueID, stringsAsFactors = TRUE)))
 }
