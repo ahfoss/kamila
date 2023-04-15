@@ -707,8 +707,8 @@ kamila <- function(
 
         # cluster test data
         testClust <- kamila(
-           conVar = conVar[testInd,],
-           catFactor = catFactor[testInd,],
+           conVar = conVar[testInd,,drop=FALSE],
+           catFactor = catFactor[testInd,,drop=FALSE],
            numClust = numClust[ithNcInd],
            numInit = numInit,
            conWeights = conWeights,
@@ -721,8 +721,8 @@ kamila <- function(
         
         # cluster training data
         trainClust <- kamila(
-          conVar = conVar[-testInd,],
-          catFactor = catFactor[-testInd,],
+          conVar = conVar[-testInd,,drop=FALSE],
+          catFactor = catFactor[-testInd,,drop=FALSE],
           numClust = numClust[ithNcInd],
           numInit = numInit,
           conWeights = conWeights,
@@ -748,7 +748,7 @@ kamila <- function(
         # Allocate test data based on training clusters.
         teIntoTr <- classifyKamila(
           trainClust,
-          list(conVar[testInd,],catFactor[testInd,])
+          list(conVar[testInd,,drop=FALSE],catFactor[testInd,,drop=FALSE])
         )
         
         # Initialize D matrix.
