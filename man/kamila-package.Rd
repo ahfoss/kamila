@@ -7,16 +7,7 @@ Clustering for mixed continuous and categorical data sets
 \description{
 A collection of methods for clustering mixed type data, including KAMILA (KAy-means for MIxed LArge data) and a flexible implementation of Modha-Spangler clustering
 }
-\details{
-\tabular{ll}{
-Package: \tab kamila\cr
-Type: \tab Package\cr
-Version: \tab 0.1.0\cr
-Date: \tab 2015-10-06\cr
-License: \tab GPL-3\cr
-}
 
-}
 \author{
 Alex Foss and Marianthi Markatou
 
