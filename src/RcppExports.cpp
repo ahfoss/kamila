@@ -5,6 +5,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // dptm
 NumericMatrix dptm(NumericMatrix pts, NumericMatrix myMeans, NumericVector wgts, int ppDim, int kkMean, int nn);
 RcppExport SEXP _kamila_dptm(SEXP ptsSEXP, SEXP myMeansSEXP, SEXP wgtsSEXP, SEXP ppDimSEXP, SEXP kkMeanSEXP, SEXP nnSEXP) {
