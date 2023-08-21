@@ -153,7 +153,7 @@ withinClusterDist <- function(dat,centroids,distFun,memberships) {
 #'
 #' A simple adaptation of \code{stats::kmeans} to mixed-type data.  Continuous
 #' variables are multiplied by the input parameter \code{conWeight}, and categorical
-#' variables are multipled by \code{1-conWeight}. If factor variables are input to
+#' variables are multiplied by \code{1-conWeight}. If factor variables are input to
 #' \code{catData}, they are transformed to 0-1 dummy coded variables with the function
 #' \code{dummyCodeFactorDf}.
 #'
