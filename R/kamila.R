@@ -164,18 +164,35 @@ psort <- function(xx,pp) {
 # then evaluates at given vector of points
 # pdim is the number of continuous variables used
 # returnFun causes a resampling function to be returned
-#' @importFrom stats bw.nrd0 approxfun quantile
-radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
+# sampleWeights: optional observation weights for the radii; when supplied a
+# weighted KDE (stats::density with weights and a weighted bw.nrd0 analogue)
+# is used instead of KernSmooth::bkde
+#' @importFrom stats bw.nrd0 approxfun quantile density
+radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE,sampleWeights=NULL) {
   MAXDENS <- 1
-  # Note using a chosen constant for bw reduces time by about 7%
-  radialBW <- bw.nrd0(radii)
-  radKDE <- bkde(
-    x = radii
-    ,kernel = "normal"
-    ,bandwidth = radialBW
-    #   ,range.x = c(0, max(radii))
-    ,range.x = c(0,max(evalPoints))
-  )
+  if (is.null(sampleWeights)) {
+    # Note using a chosen constant for bw reduces time by about 7%
+    radialBW <- bw.nrd0(radii)
+    radKDE <- bkde(
+      x = radii
+      ,kernel = "normal"
+      ,bandwidth = radialBW
+      #   ,range.x = c(0, max(radii))
+      ,range.x = c(0,max(evalPoints))
+    )
+  } else {
+    radialBW <- weightedBwNrd0(radii, sampleWeights)
+    radKDE <- stats::density(
+      x = radii
+      ,bw = radialBW
+      ,kernel = "gaussian"
+      ,weights = sampleWeights/sum(sampleWeights)
+      ,n = 401L # matches KernSmooth::bkde default gridsize
+      ,from = 0
+      ,to = max(evalPoints)
+    )
+    radKDE <- list(x = radKDE$x, y = radKDE$y)
+  }
   
   # remove any zero and negative density estimates
   newY <- radKDE$y
@@ -294,6 +311,7 @@ radialKDE <- function(radii,evalPoints,pdim,returnFun=FALSE) {
 #' @param calcNumClust Character: Method for selecting the number of clusters.
 #' @param numPredStrCvRun Numeric: Number of CV runs for prediction strength method. Ignored unless calcNumClust == 'ps'
 #' @param predStrThresh Numeric: Threshold for prediction strength method. Ignored unless calcNumClust == 'ps'
+#' @param obsWeights A vector of positive observation-level sample weights (e.g. survey weights), length equal to the number of rows of conVar. Default of all 1's gives the unweighted estimators. When supplied, cluster centroids are weighted means, the radial kernel density estimate of the continuous distances is weighted, the categorical level probabilities are estimated from weighted frequencies, and the objective function and prediction strength statistics weight each observation accordingly.
 #' @return A list with the following results objects:
 #' \item{finalMemb}{A numeric vector with cluster assignment indicated by integer.}
 #' \item{numIter}{}
@@ -333,7 +351,18 @@ kamila <- function(
   ,calcNumClust = 'none'
   ,numPredStrCvRun = 10
   ,predStrThresh = 0.8
+  ,obsWeights = rep(1,nrow(conVar))
 ) {
+
+  # observation-level sample weight checks
+  if (length(obsWeights) != nrow(conVar)) {
+    stop('Input parameter obsWeights must have length equal to the number of observations')
+  }
+  if (any(!is.finite(obsWeights)) | any(obsWeights <= 0)) {
+    stop('Input parameter obsWeights must be finite and strictly positive')
+  }
+  # if all weights are 1 the original (unweighted, partly Rcpp) code paths are used
+  useObsWeights <- !all(obsWeights == 1)
 
   if (calcNumClust == 'none') {
     if (length(numClust) != 1) {
@@ -366,9 +395,15 @@ kamila <- function(
     totalLogLikVect <- rep(NaN,numInit)
     catLogLikVect <- rep(NaN,numInit)
     winDistVect <- rep(NaN,numInit)
-    totalDist <- sum(dptmCpp(
+    # grand centroid and total distance use the observation weights
+    grandCentroid <- if (useObsWeights) {
+      colSums(as.matrix(conVar) * obsWeights) / sum(obsWeights)
+    } else {
+      colMeans(conVar)
+    }
+    totalDist <- sum(obsWeights * dptmCpp(
       pts=conVar
-      ,myMeans=matrix(colMeans(conVar),nrow=1)
+      ,myMeans=matrix(grandCentroid,nrow=1)
       ,wgts=conWeights #rep(1,numConVar)
     ))
     objectiveVect <- rep(NaN,numInit)
@@ -452,6 +487,7 @@ kamila <- function(
             ,evalPoints=c(dist_i)
             ,pdim=numConVar
             ,returnFun = returnResampler
+            ,sampleWeights = if (useObsWeights) obsWeights else NULL
           )$kdes
         )
         logDistRadDens_i <- matrix(
@@ -503,17 +539,31 @@ kamila <- function(
         
         #9 calculate new means: k X p matrix
         #means_i <- as.matrix(aggregate(x=conVar,by=list(membNew),FUN=mean)[,-1])
-        means_i <- aggregateMeans(
-          conVar = as.matrix(conVar)
-          ,membNew = membNew
-          ,kk = numClust
-        )
-        
+        means_i <- if (useObsWeights) {
+          # weighted centroids
+          weightedAggregateMeans(
+            conVar = as.matrix(conVar)
+            ,membNew = membNew
+            ,kk = numClust
+            ,obsWeights = obsWeights
+          )
+        } else {
+          aggregateMeans(
+            conVar = as.matrix(conVar)
+            ,membNew = membNew
+            ,kk = numClust
+          )
+        }
+
         #10.1 new joint probability table, possibly with kernel estimator
         #10.2 Also calculate conditional probabilities: P(lev | clust)
-        
-        # New Rcpp implementation
-        jointProbsList <- jointTabSmoothedList(catFactorNumeric,membNew,numLev,catBw,kk=numClust)
+
+        # New Rcpp implementation (weighted R analogue when obsWeights supplied)
+        jointProbsList <- if (useObsWeights) {
+          weightedJointTabSmoothedList(catFactorNumeric,membNew,numLev,catBw,kk=numClust,obsWeights=obsWeights)
+        } else {
+          jointTabSmoothedList(catFactorNumeric,membNew,numLev,catBw,kk=numClust)
+        }
         logProbsCond_i <- lapply(jointProbsList,FUN=function(xx) log(xx/rowSums(xx)))
         
         ### Old approach:
@@ -561,18 +611,19 @@ kamila <- function(
       
       
       # Store log likelihood for each initialization
+      # (obsWeights all equal to 1 reduces to the original unweighted sums)
       if (degenerateSoln) {
         totalLogLikVect[init] <- -Inf
       } else {
-        totalLogLikVect[init] <- sum(rowMax(allLogLiks))
+        totalLogLikVect[init] <- sum(obsWeights * rowMax(allLogLiks))
       }
-      
+
       # store num init
       numIterVect[init] <- numIter
-      
+
       # other useful internal measures of cluster quality
-      catLogLikVect[init] <- sum(rowMax(catLogLiks))
-      winDistVect[init] <- sum(dist_i[cbind(1:numObs, membNew)])
+      catLogLikVect[init] <- sum(obsWeights * rowMax(catLogLiks))
+      winDistVect[init] <- sum(obsWeights * dist_i[cbind(1:numObs, membNew)])
       winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
       if (winToBetRat < 0) winToBetRat <- 100
       # Note catLogLik is negative, larger is better
@@ -634,9 +685,10 @@ kamila <- function(
       ,conInitMethod = conInitMethod
       ,catBw = catBw
       ,verbose = verbose
+      ,obsWeights = obsWeights
     )
-    
-    
+
+
     return(
       list(
         finalMemb=as.numeric(finalMemb)
@@ -716,9 +768,10 @@ kamila <- function(
            maxIter = maxIter,
            conInitMethod = conInitMethod,
            catBw = catBw,
-           verbose = FALSE
+           verbose = FALSE,
+           obsWeights = obsWeights[testInd]
         )
-        
+
         # cluster training data
         trainClust <- kamila(
           conVar = conVar[-testInd,,drop=FALSE],
@@ -730,7 +783,8 @@ kamila <- function(
           maxIter = maxIter,
           conInitMethod = conInitMethod,
           catBw = catBw,
-          verbose = FALSE
+          verbose = FALSE,
+          obsWeights = obsWeights[-testInd]
         )
         
         # Generate a list of indices for each cluster within test data.
@@ -751,47 +805,26 @@ kamila <- function(
           list(conVar[testInd,,drop=FALSE],catFactor[testInd,,drop=FALSE])
         )
         
-        # Initialize D matrix.
-        dMat <- matrix(
-          NaN,
-          nrow = numInTest,
-          ncol = numInTest
-        )
-        
-        # Calculate D matrix.
-        # replace with RCpp
-        for (i in 1:(numInTest-1)) {
-          for (j in (i+1):numInTest) {
-            dMat[i,j] <- teIntoTr[i] == teIntoTr[j]
-          }
-        }
-        
-        # Initialize proportions to zero.
-        psProps <- rep(0,numClust[ithNcInd])
-
         # Calculate prediction strength proportions.
-        # replace with RCpp
+        # Weighted pair proportion: within each test cluster cl,
+        #   psProps[cl] = sum_{i<j} w_i w_j 1[teIntoTr_i == teIntoTr_j] / sum_{i<j} w_i w_j
+        # computed in O(n) via per-group weight sums. With unit weights this
+        # equals the original pairwise-count implementation
+        # (numerator = # co-clustered pairs, denominator = clustN*(clustN-1)/2).
+        wTest <- obsWeights[testInd]
+        psProps <- rep(NA_real_, numClust[ithNcInd])
         for (cl in 1:numClust[ithNcInd]) {
           clustN <- length(testIndList[[cl]])
-	  if (clustN > 1) {
-##################################
-# Construct dMat separately within each cluster
-# initialize dMat_cl
-# dMat_cl[i,j] <- teIntoTr[testIndList[[cl]][i]] == teIntoTr[testIndList[[cl]][j]]
-##################################
-            for (i in 1:(clustN-1)) {
-              for (j in (i+1):clustN) {
-                psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
-              }
-            }
-	  }
-	  if (clustN < 2) {
-	    # if cluster size is 1 or zero, not applicable
-	    psProps[cl] <- NA
-	  } else {
-            # * 2 since only upper triangle of dMat is used.
-            psProps[cl] <- psProps[cl] / (clustN*(clustN-1)) * 2
-	  }
+          if (clustN > 1) {
+            wc <- wTest[testIndList[[cl]]]
+            grp <- teIntoTr[testIndList[[cl]]]
+            sg <- tapply(wc, grp, sum)
+            s2g <- tapply(wc^2, grp, sum)
+            numerPairs <- sum((sg^2 - s2g)/2)
+            denomPairs <- (sum(wc)^2 - sum(wc^2))/2
+            psProps[cl] <- numerPairs / denomPairs
+          }
+          # if cluster size is 1 or zero, not applicable (psProps[cl] stays NA)
         }
 
         # Calculate and update prediction strength results.
@@ -836,7 +869,8 @@ kamila <- function(
       maxIter = maxIter,
       conInitMethod = conInitMethod,
       catBw = catBw,
-      verbose = FALSE
+      verbose = FALSE,
+      obsWeights = obsWeights
     )
     outRes$nClust <- list(
       bestNClust = kfinal,
@@ -940,8 +974,11 @@ classifyKamila <- function(obj, newData) {
   ))
   
   # calculate continuous log density KD estimates
+  # (use the training observation weights, if any, to reconstruct the KDE)
+  trainObsWeights <- obj$input$obsWeights
+  if (is.null(trainObsWeights) || all(trainObsWeights == 1)) trainObsWeights <- NULL
   logRadDens <- matrix(
-    log(radialKDE(radii=minDistances,evalPoints=c(newDistances),pdim=ncol(newCon))$kdes)
+    log(radialKDE(radii=minDistances,evalPoints=c(newDistances),pdim=ncol(newCon),sampleWeights=trainObsWeights)$kdes)
     ,nrow=nrow(newCon)
     ,ncol=nrow(obj$finalCenters)
   )
