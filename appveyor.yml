@@ -14,10 +14,11 @@ install:
 # Adapt as necessary starting from here
 
 build_script:
-  - travis-tool.sh install_deps
+  - Rscript -e "install.packages(c('remotes', 'rcmdcheck', 'gtools', 'testthat', 'Rcpp'), repos = 'https://cloud.r-project.org')"
+  - Rscript -e "remotes::install_deps(dependencies = TRUE, repos = 'https://cloud.r-project.org')"
 
 test_script:
-  - travis-tool.sh run_tests
+  - Rscript -e "rcmdcheck::rcmdcheck(args = c('--no-manual'), error_on = 'error')"
 
 on_failure:
   - 7z a failure.zip *.Rcheck\*
