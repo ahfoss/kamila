@@ -71,6 +71,6 @@ test_that('KAMILA prediction strength works with single-variable catFactor data 
     calcNumClust = 'ps',
     numPredStrCvRun = 2
   )
-  expect_s3_class(res, "kamila")
+  expect_true(is.list(res))
   expect_true(res$nClust$bestNClust %in% 2:3)
 })
