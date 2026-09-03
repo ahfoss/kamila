@@ -360,7 +360,7 @@ kamila <- function(
     numLev <- sapply(catFactor,function(xx) length(levels(xx)))
     
     # for later use, convert to numeric matrix by level codes
-    catFactorNumeric <- sapply(catFactor,as.numeric,simplify=TRUE)
+    catFactorNumeric <- matrix(sapply(catFactor, as.numeric, simplify = TRUE), nrow = numObs, ncol = numCatVar)
     
     numIterVect <- rep(NaN,numInit)
     totalLogLikVect <- rep(NaN,numInit)
@@ -951,7 +951,7 @@ classifyKamila <- function(obj, newData) {
   logCatKProbs = with(obj,lapply(
     X = 1:ncol(newCatFactor)
     ,FUN = function(ind) {
-      input$catWeights[ind]*t(logClustProbs[[ind]][,as.numeric(newCatFactor[,ind])])
+      input$catWeights[ind]*t(logClustProbs[[ind]][,as.numeric(newCatFactor[,ind]),drop=FALSE])
     }
   )) # this is a list of q matrices, each n x k; with elements log-likelihood
   
