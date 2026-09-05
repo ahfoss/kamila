@@ -54,8 +54,14 @@ test_that("wkmeans works with factor and numeric data and enforces input validat
   expect_s3_class(res2, "kmeans")
 
   # Error validations
-  expect_error(wkmeans(con, data.frame(f = c("A", "B")), 0.5, 2), "must be a data frame with all factor variables or all numeric")
-  expect_error(wkmeans(data.frame(x = c("a", "b")), cat_fac, 0.5, 2), "must be data frame with all integer/numeric types")
+  expect_error(
+    wkmeans(con, data.frame(f = c("A", "B")), 0.5, 2),
+    "must be a data frame with all factor variables or all numeric"
+  )
+  expect_error(
+    wkmeans(data.frame(x = c("a", "b")), cat_fac, 0.5, 2),
+    "must be data frame with all integer/numeric types"
+  )
   expect_error(wkmeans(con, cat_fac, 1.5, 2), "conWeight must be numeric and in \\[0,1\\]")
   expect_error(wkmeans(con, cat_fac, 0.5, 0), "nclust must be a positive integer")
 })

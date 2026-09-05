@@ -105,7 +105,7 @@ initMeans <- function(conVar, method, numClust) {
 #   if (ppDim != ncol(myMeans)) stop("Dimensionality of pts and myMeans must be equal")
 #   if (ppDim != length(wgts)) stop("Dimensionality of pts must equal # weights")
 #   kkMean <- nrow(myMeans)
-# 
+#
 #   sapply(
 #     1:kkMean,
 #     function(kk) {
@@ -323,7 +323,9 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' kamRes <- kamila(conDf, catDf, numClust = 2, numInit = 10)
 #'
 #' table(kamRes$finalMemb, dat$trueID)
-#' @references Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
+#' @references Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and
+#'   Hadoop. Journal of Statistical Software, 83(13). 2018.
+#'   doi: 10.18637/jss.v083.i13
 
 kamila <- function(
   conVar,
@@ -350,10 +352,10 @@ kamila <- function(
     returnResampler <- FALSE
 
     # (0) extract data characteristics, checks
-    if (!is.data.frame(conVar) | !is.data.frame(catFactor)) {
+    if (!is.data.frame(conVar) || !is.data.frame(catFactor)) {
       stop("Input datasets must be dataframes")
     }
-    if (max(c(conWeights, catWeights)) > 1 | min(c(conWeights, catWeights)) < 0) stop("Weights must be in [0,1]")
+    if (max(c(conWeights, catWeights)) > 1 || min(c(conWeights, catWeights)) < 0) stop("Weights must be in [0,1]")
 
     numObs <- nrow(conVar)
     numConVar <- ncol(conVar)
@@ -417,7 +419,7 @@ kamila <- function(
       # Loop until convergence
       # loop for minimum two iterations, while all memberships are NOT UNchanged, while still under max # iter
       while (
-        ((numIter < 3) | !all(membOld == membNew)) &
+        ((numIter < 3) || !all(membOld == membNew)) &&
           (numIter < maxIter)
       ) {
         numIter <- numIter + 1
@@ -525,7 +527,7 @@ kamila <- function(
         # )
 
         # print current plot and metrics, if requested
-        #if (FALSE) { # (verbose) {
+        # if (FALSE) { # (verbose) {
         #  catLikTmp <- sum(rowMax(catLogLiks))
         #  winDistTmp <- sum(dist_i[cbind(1:numObs, membNew)])
         #  winToBetRatTmp <- winDistTmp / (totalDist - winDistTmp)
@@ -539,7 +541,7 @@ kamila <- function(
         #    paste("w/b dist =", round(winDistTmp / (totalDist - winDistTmp), 2)),
         #    paste("objective =", round(objectiveTmp, 2))
         #  ))
-        #}
+        # }
 
         # store every solution if verbose=true
         if (verbose) {
@@ -576,8 +578,8 @@ kamila <- function(
 
       # Store current solution if objective beats all others
       if (
-        (init == 1) |
-          (init > 1 & objectiveVect[init] > max(objectiveVect[1:(init - 1)]))
+        (init == 1) ||
+          (init > 1 && objectiveVect[init] > max(objectiveVect[1:(init - 1)]))
       ) {
         finalLogLik <- totalLogLikVect[init]
         finalObj <- objectiveVect[init]
@@ -587,7 +589,7 @@ kamila <- function(
           nrow = nrow(means_i),
           ncol = numConVar,
           dimnames = list(
-            cluster = paste("Clust", 1:nrow(means_i)),
+            cluster = paste("Clust", seq_len(nrow(means_i))),
             variableMean = paste("Mean", 1:numConVar)
           )
         )
@@ -649,10 +651,12 @@ kamila <- function(
 
     # Test that numClust is an integer vector.
     allEqInteger <- all(numClust == as.integer(numClust))
-    if (is.na(allEqInteger) ||
-      !allEqInteger ||
-      !all(sapply(numClust, is.numeric)) ||
-      length(numClust) != length(unique(numClust))) {
+    if (
+      is.na(allEqInteger) ||
+        !allEqInteger ||
+        !all(sapply(numClust, is.numeric)) ||
+        length(numClust) != length(unique(numClust))
+    ) {
       stop('Input parameter numClust must be a vector of unique integers
          if input parameter calcNumClust == "ps"')
     }
@@ -666,18 +670,22 @@ kamila <- function(
     }
 
     # Test that predStrThresh is within (0,1).
-    if (length(predStrThresh) != 1 ||
-      is.na(predStrThresh) ||
-      predStrThresh <= 0 ||
-      predStrThresh >= 1) {
+    if (
+      length(predStrThresh) != 1 ||
+        is.na(predStrThresh) ||
+        predStrThresh <= 0 ||
+        predStrThresh >= 1
+    ) {
       stop("Input parameter predStrThresh must be scalar in (0,1)")
     }
 
     # Test that numPredStrCvRun is a valid number of cv runs.
-    if (length(numPredStrCvRun) != 1 ||
-      is.na(numPredStrCvRun) ||
-      numPredStrCvRun != as.integer(numPredStrCvRun) ||
-      numPredStrCvRun < 1) {
+    if (
+      length(numPredStrCvRun) != 1 ||
+        is.na(numPredStrCvRun) ||
+        numPredStrCvRun != as.integer(numPredStrCvRun) ||
+        numPredStrCvRun < 1
+    ) {
       stop("Input parameter numPredStrCvRun must be a positive integer.")
     }
 
@@ -695,7 +703,7 @@ kamila <- function(
     numObs <- nrow(conVar)
     numInTest <- floor(numObs / 2)
     for (cvRun in 1:numPredStrCvRun) {
-      for (ithNcInd in 1:length(numClust)) {
+      for (ithNcInd in seq_along(numClust)) {
         # generate cv indices
         testInd <- sample(numObs, size = numInTest, replace = FALSE)
 
@@ -875,7 +883,9 @@ cyclicalCoding <- function(invar) {
 #' to construct the kamila clustering.
 #' @export
 #' @param obj An output object from the kamila function.
-#' @param newData A list of length 2, with first element a data frame of continuous variables, and second element a data frame of categorical factors.
+#' @param newData A list of length 2, with first element a data frame of
+#'   continuous variables, and second element a data frame of categorical
+#'   factors.
 #' @return An integer vector denoting cluster assignments of the new data points.
 #' @examples
 #' # Generate toy data set
@@ -897,7 +907,9 @@ cyclicalCoding <- function(invar) {
 #' # Predict membership in the test data set
 #' kamilaPred <- classifyKamila(kamilaObj, list(conTest, catTest))
 #' table(dat1$trueID[-trainingIds], kamilaPred)
-#' @references Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
+#' @references Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and
+#'   Hadoop. Journal of Statistical Software, 83(13). 2018.
+#'   doi: 10.18637/jss.v083.i13
 classifyKamila <- function(obj, newData) {
   # if (length(newData) == 3) {
   #  cyclicRecoded <- as.data.frame(lapply(newData[[3]],cyclicalCoding))
@@ -942,7 +954,7 @@ classifyKamila <- function(obj, newData) {
   # calculate categorical probabilities
   logClustProbs <- lapply(obj$finalProbs, log)
   logCatKProbs <- with(obj, lapply(
-    X = 1:ncol(newCatFactor),
+    X = seq_len(ncol(newCatFactor)),
     FUN = function(ind) {
       input$catWeights[ind] * t(logClustProbs[[ind]][, as.numeric(newCatFactor[, ind])])
     }

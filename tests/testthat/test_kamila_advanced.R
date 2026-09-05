@@ -25,18 +25,30 @@ test_that("kamila error handling and verbose mode work", {
   expect_error(kamila(matrix(1:20), catFactor, numClust = 2, numInit = 2), "Input datasets must be dataframes")
 
   # Invalid weights
-  expect_error(kamila(conVar, catFactor, numClust = 2, numInit = 2, conWeights = c(1.5, 0.5)), "Weights must be in \\[0,1\\]")
-  expect_error(kamila(conVar, catFactor, numClust = 2, numInit = 2, conWeights = c(-0.1, 0.5)), "Weights must be in \\[0,1\\]")
+  expect_error(
+    kamila(conVar, catFactor, numClust = 2, numInit = 2, conWeights = c(1.5, 0.5)),
+    "Weights must be in \\[0,1\\]"
+  )
+  expect_error(
+    kamila(conVar, catFactor, numClust = 2, numInit = 2, conWeights = c(-0.1, 0.5)),
+    "Weights must be in \\[0,1\\]"
+  )
 
   # Mismatched row counts
   expect_error(kamila(conVar, catFactor[1:10, , drop = FALSE], numClust = 2, numInit = 2), "don't match")
 
   # Invalid calcNumClust option
-  expect_error(kamila(conVar, catFactor, numClust = 2, numInit = 2, calcNumClust = "invalid"), "must be either \"none\" or \"ps\"")
+  expect_error(
+    kamila(conVar, catFactor, numClust = 2, numInit = 2, calcNumClust = "invalid"),
+    "must be either \"none\" or \"ps\""
+  )
 
   # Verbose mode
   kam_verb <- kamila(conVar, catFactor, numClust = 2, numInit = 2, verbose = TRUE)
-  expect_named(kam_verb$verbose, c("totalLogLikVect", "catLogLikVect", "winDistVect", "totalDist", "objectiveVect", "membLongList"))
+  expect_named(
+    kam_verb$verbose,
+    c("totalLogLikVect", "catLogLikVect", "winDistVect", "totalDist", "objectiveVect", "membLongList")
+  )
 })
 
 test_that("kamila with prediction strength (calcNumClust == 'ps') works and validates parameters", {
@@ -44,26 +56,41 @@ test_that("kamila with prediction strength (calcNumClust == 'ps') works and vali
   catFactor <- data.frame(f1 = factor(rep(c("A", "B"), 20)), stringsAsFactors = TRUE)
 
   # Invalid numClust inputs
-  expect_error(kamila(conVar, catFactor, numClust = c(2, 2), numInit = 2, calcNumClust = "ps"), "vector of unique integers")
+  expect_error(
+    kamila(conVar, catFactor, numClust = c(2, 2), numInit = 2, calcNumClust = "ps"),
+    "vector of unique integers"
+  )
   expect_error(kamila(conVar, catFactor, numClust = c(2, 30), numInit = 2, calcNumClust = "ps"), "cannot exceed")
 
   # Scalar numClust warning
   expect_warning(kamila(conVar, catFactor, numClust = 2, numInit = 2, calcNumClust = "ps"), "numClust is a scalar")
 
   # Invalid predStrThresh
-  expect_error(kamila(conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps", predStrThresh = 1.5), "must be scalar in \\(0,1\\)")
+  expect_error(
+    kamila(conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps", predStrThresh = 1.5),
+    "must be scalar in \\(0,1\\)"
+  )
 
   # Invalid numPredStrCvRun
-  expect_error(kamila(conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps", numPredStrCvRun = 0), "must be a positive integer")
+  expect_error(
+    kamila(conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps", numPredStrCvRun = 0),
+    "must be a positive integer"
+  )
 
   # High threshold warning
   expect_warning(
-    kamila(conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps", numPredStrCvRun = 2, predStrThresh = 0.999),
+    kamila(
+      conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps",
+      numPredStrCvRun = 2, predStrThresh = 0.999
+    ),
     "No cluster size is above prediction strength threshold"
   )
 
   # Successful PS run
-  ps_res <- kamila(conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps", numPredStrCvRun = 2, predStrThresh = 0.5)
+  ps_res <- kamila(
+    conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps",
+    numPredStrCvRun = 2, predStrThresh = 0.5
+  )
   expect_true(ps_res$nClust$bestNClust %in% c(2, 3))
 })
 
@@ -106,7 +133,10 @@ test_that("kamila PS handles small cluster size fallback (clustN < 2)", {
 
   # numClust = c(2, 4) with 8 observations often generates a test cluster of size 1
   ps_small <- suppressWarnings(
-    kamila(conVar, catFactor, numClust = c(2, 4), numInit = 2, calcNumClust = "ps", numPredStrCvRun = 2, predStrThresh = 0.5)
+    kamila(
+      conVar, catFactor, numClust = c(2, 4), numInit = 2, calcNumClust = "ps",
+      numPredStrCvRun = 2, predStrThresh = 0.5
+    )
   )
   expect_true(!is.null(ps_small$finalMemb))
 })
