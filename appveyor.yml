@@ -18,11 +18,29 @@ install:
 # Adapt as necessary starting from here
 
 build_script:
-  - Rscript -e "install.packages(c('remotes', 'rcmdcheck', 'gtools', 'testthat', 'Rcpp'), repos = 'https://cloud.r-project.org')"
+  - Rscript -e "install.packages(c('remotes', 'rcmdcheck', 'gtools', 'testthat', 'Rcpp', 'pkgbuild'), repos = 'https://cloud.r-project.org')"
   - Rscript -e "remotes::install_deps(dependencies = TRUE, repos = 'https://cloud.r-project.org')"
 
 test_script:
-  - Rscript -e "rcmdcheck::rcmdcheck(args = c('--no-manual'), error_on = 'error')"
+  - ps: |
+      $rtools_paths = @(
+        "C:\rtools45\usr\bin", "C:\rtools45\x86_64-w64-mingw32.static.posix-x86_64\bin",
+        "C:\rtools44\usr\bin", "C:\rtools44\x86_64-w64-mingw32.static.posix-x86_64\bin",
+        "C:\rtools43\usr\bin", "C:\rtools43\x86_64-w64-mingw32.static.posix-x86_64\bin",
+        "C:\rtools40\usr\bin", "C:\rtools40\mingw64\bin"
+      )
+      foreach ($p in $rtools_paths) {
+        if (Test-Path $p) {
+          $env:PATH = "$p;" + $env:PATH
+        }
+      }
+      Get-ChildItem -Path "C:\rtools*" -ErrorAction SilentlyContinue | ForEach-Object {
+        $u = Join-Path $_.FullName "usr\bin"
+        $m = Join-Path $_.FullName "x86_64-w64-mingw32.static.posix-x86_64\bin"
+        if (Test-Path $u) { $env:PATH = "$u;" + $env:PATH }
+        if (Test-Path $m) { $env:PATH = "$m;" + $env:PATH }
+      }
+      Rscript -e "rcmdcheck::rcmdcheck(args = c('--no-manual'), error_on = 'error')"
 
 on_failure:
   - 7z a failure.zip *.Rcheck\*
