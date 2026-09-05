@@ -69,12 +69,13 @@ Run all commands from the repository root directory using `Rscript` or an intera
 
 ---
 
-## 4. Git Commit Conventions
+## 4. Git Commit & Branching Conventions
 
-Use concise Conventional Commit messages:
-- `feat:` New feature or parameter addition
-- `fix:` Bug fix or error resolution
-- `docs:` Documentation updates (roxygen2 / README / AGENTS.md)
-- `ci:` Pipeline changes (`.github/workflows`)
-- `test:` Adding or updating `testthat` specs
-- `refactor:` Code reorganization without behavior change
+- **Branch Management**: **NEVER** commit or push directly to `master` unless explicitly requested by the user. Always perform development and commits on feature or bugfix branches (`fix/*`, `feature/*`).
+- **Commit Format**: Use concise Conventional Commit messages:
+  - `feat:` New feature or parameter addition
+  - `fix:` Bug fix or error resolution
+  - `docs:` Documentation updates (roxygen2 / README / AGENTS.md)
+  - `ci:` Pipeline changes (`.github/workflows`)
+  - `test:` Adding or updating `testthat` specs
+  - `refactor:` Code reorganization without behavior change
