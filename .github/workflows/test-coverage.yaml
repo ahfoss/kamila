@@ -27,13 +27,14 @@ jobs:
           extra-packages: any::covr
           needs: coverage
 
-      - name: Test coverage
-        run: covr::codecov(quiet = FALSE)
+      - name: Generate Coverage Report
+        run: covr::to_cobertura(filename = "coverage.xml")
         shell: Rscript {0}
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v3
         with:
+          files: coverage.xml
           fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+
 
