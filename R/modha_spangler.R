@@ -76,13 +76,13 @@ gmsClust <- function(
   Qcat <- rep(NaN,length(weights))
   nullConClustering <- clustFun(
     conData = conData,
-    catData = rep(catData[1,1], nrow(catData)),
+    catData = data.frame(cat = rep(catData[1,1], nrow(catData)), stringsAsFactors = TRUE),
     conWeight = 1,
     nclust = 1,
     ...
   )
   nullCatClustering <- clustFun(
-    conData = rep(conData[1,1], nrow(conData)),
+    conData = data.frame(con = rep(conData[1,1], nrow(conData)), stringsAsFactors = TRUE),
     catData = catData,
     conWeight = 0,
     nclust = 1,

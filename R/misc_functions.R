@@ -82,7 +82,7 @@ distFromData2Centroid <- function(dat,centroid,distFun) {
 withinClusterDist <- function(dat,centroids,distFun,memberships) {
   if (is.null(centroids)) {
     stop('Formal parameter centroids cannot be NULL.')
-  } else if (nrow(centroids) < 1) {
+  } else if (NROW(centroids) < 1) {
     stop('Must include at least one centroid.')
   }
   centroids <- as.data.frame(centroids)
