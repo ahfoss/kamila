@@ -28,5 +28,10 @@ jobs:
           needs: lint
 
       - name: Lint package
-        run: lintr::lint_package()
+        run: |
+          lints <- lintr::lint_package()
+          print(lints)
+          if (length(lints) > 0) {
+            stop(sprintf("Linting failed: %d lint(s) found.", length(lints)))
+          }
         shell: Rscript {0}
