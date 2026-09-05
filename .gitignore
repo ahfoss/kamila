@@ -1,5 +1,21 @@
-# R History Files
+# R History & Workspace Files
 .Rhistory
+.RData
+.RDataTmp
+.RuserData
+
+# R Package Check & Build Products
+*.Rcheck/
+..Rcheck/
+00check.log
+*.tar.gz
+*.tgz
+
+# Compiled C/C++ binaries & objects
+src/*.o
+src/*.so
+src/*.dll
+src/*.dylib
 
 # RStudio files
 .Rproj.user/
