@@ -1,4 +1,8 @@
 test_that("dummyCodeOneVar and dummyCodeFactorDf work as expected", {
+  # Non-factor input to dummyCodeOneVar
+  d_char <- dummyCodeOneVar(c("a", "b", "a"))
+  expect_equal(dim(d_char), c(3, 2))
+
   fac <- factor(c("a", "b", "a", "c"))
   d1 <- dummyCodeOneVar(fac)
   expect_equal(dim(d1), c(4, 3))

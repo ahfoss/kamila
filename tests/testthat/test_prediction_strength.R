@@ -61,4 +61,11 @@ test_that("nclust1x and nclustFull run without error", {
   resFull <- nclustFull(conData, kmax = 3, nrep = 2)
   expect_named(resFull, c("k", "psVec", "scores", "thresh", "kmax", "nrep"))
   expect_true(resFull$k %in% c(2, 3))
+
+  # verbose = TRUE in nclust1x
+  expect_output(nclust1x(conData, kmax = 3, verbose = TRUE), "Now starting k =")
+
+  # high psThresh fallback in nclustFull
+  resFullHigh <- nclustFull(conData, kmax = 3, psThresh = 0.999, nrep = 2)
+  expect_equal(resFullHigh$thresh, 0.999)
 })

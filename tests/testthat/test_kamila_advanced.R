@@ -98,3 +98,15 @@ test_that("myCatKern and sumMatList Rcpp helper function work", {
   s_mat <- sumMatList(list(m1, m2))
   expect_equal(s_mat, m1 + m2)
 })
+
+test_that("kamila PS handles small cluster size fallback (clustN < 2)", {
+  set.seed(123)
+  conVar <- data.frame(x = c(0, 0.1, 0.2, 10, 10.1, 10.2, 20, 20.1))
+  catFactor <- data.frame(f = factor(c("A", "A", "A", "B", "B", "B", "C", "C")))
+
+  # numClust = c(2, 4) with 8 observations often generates a test cluster of size 1
+  ps_small <- suppressWarnings(
+    kamila(conVar, catFactor, numClust = c(2, 4), numInit = 2, calcNumClust = "ps", numPredStrCvRun = 2, predStrThresh = 0.5)
+  )
+  expect_true(!is.null(ps_small$finalMemb))
+})

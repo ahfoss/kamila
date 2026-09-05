@@ -40,7 +40,7 @@ test_that("genMixedData works with logical nConWithErr vector", {
 
 test_that("genMixedData handles edge cases for error variables", {
   set.seed(123)
-  # Zero con error variables
+  # Zero con error variables with nCatWithErr = 1
   dat0 <- genMixedData(
     sampSize = 30,
     nConVar = 2,

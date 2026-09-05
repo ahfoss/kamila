@@ -2,10 +2,12 @@
 using namespace Rcpp;
 
 // https://github.com/RcppCore/Rcpp/issues/636
+// #nocov start
 void R_init_kamila(DllInfo* info) {
   R_registerRoutines(info, NULL, NULL, NULL, NULL);
   R_useDynamicSymbols(info, TRUE);
 }
+// #nocov end
 
 // [[Rcpp::export]]
 NumericMatrix dptm(
