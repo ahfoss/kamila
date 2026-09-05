@@ -30,7 +30,7 @@ jobs:
           needs: coverage
 
       - name: Generate Coverage Report
-        run: covr::to_cobertura(filename = "coverage.xml")
+        run: covr::to_cobertura(covr::package_coverage(), filename = "coverage.xml")
         shell: Rscript {0}
 
       - name: Upload coverage to Codecov
