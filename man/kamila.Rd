@@ -2,15 +2,15 @@
 % Please edit documentation in R/kamila.R
 \name{kamila}
 \alias{kamila}
-\title{KAMILA clustering of mixed-type data.}
+\title{KAMILA clustering of mixed-type, continuous-only, or categorical-only data.}
 \usage{
 kamila(
-  conVar,
-  catFactor,
+  conVar = NULL,
+  catFactor = NULL,
   numClust,
   numInit,
-  conWeights = rep(1, ncol(conVar)),
-  catWeights = rep(1, ncol(catFactor)),
+  conWeights = NULL,
+  catWeights = NULL,
   maxIter = 25,
   conInitMethod = "runif",
   catBw = 0.025,
@@ -21,9 +21,11 @@ kamila(
 )
 }
 \arguments{
-\item{conVar}{A data frame of continuous variables.}
+\item{conVar}{An optional data frame of continuous variables. At least one of
+\code{conVar} or \code{catFactor} must be specified.}
 
-\item{catFactor}{A data frame of factors.}
+\item{catFactor}{An optional data frame of factors. At least one of
+\code{conVar} or \code{catFactor} must be specified.}
 
 \item{numClust}{The number of clusters returned by the algorithm.}
 
@@ -31,7 +33,7 @@ kamila(
 
 \item{conWeights}{A vector of continuous weights for the continuous variables.}
 
-\item{catWeights}{A vector of continuous weights for the categorical variables.}
+\item{catWeights}{A vector of weights for the categorical variables.}
 
 \item{maxIter}{The maximum number of iterations in each run.}
 
@@ -61,7 +63,8 @@ A list with the following results objects:
 }
 \description{
 KAMILA is an iterative clustering method that equitably balances the
-contribution of continuous and categorical variables.
+contribution of continuous and categorical variables. It also natively
+supports continuous-only and categorical-only data.
 }
 \details{
 KAMILA (KAy-means for MIxed LArge data sets) is an iterative clustering
@@ -70,10 +73,23 @@ categorical variables. It uses a kernel density estimation technique to
 flexibly model spherical clusters in the continuous domain, and uses a
 multinomial model in the categorical domain.
 
+In addition to mixed-type data, KAMILA natively supports single-modality
+data:
+\itemize{
+  \item \strong{Continuous-only data}: When \code{catFactor = NULL}, KAMILA
+  clusters continuous data using semi-parametric radial kernel density
+  estimation (RKDE), selecting the best initialization via continuous
+  pseudo log-likelihood maximization.
+  \item \strong{Categorical-only data}: When \code{conVar = NULL}, KAMILA
+  clusters categorical data using fast C++ smoothed multinomial estimation,
+  selecting the best initialization via categorical log-likelihood
+  maximization.
+}
+
 Weighting scheme: If no weights are desired, set all weights to 1 (the
 default setting). Let a_1, ..., a_p denote the weights for p continuous
 variables. Let b_1, ..., b_q denote the weights for q categorical variables.
- Currently, continuous weights are applied during the calculation of
+Currently, continuous weights are applied during the calculation of
 Euclidean distance, as:
 Categorical weights are applied to the log-likelihoods obtained by the
 level probabilities given cluster membership as:

@@ -9,9 +9,10 @@ classifyKamila(obj, newData)
 \arguments{
 \item{obj}{An output object from the kamila function.}
 
-\item{newData}{A list of length 2, with first element a data frame of
-continuous variables, and second element a data frame of categorical
-factors.}
+\item{newData}{For mixed-type data, a list of length 2, with first element
+a data frame of continuous variables, and second element a data frame of
+categorical factors. For continuous-only or categorical-only models, either
+a single data frame or a list containing the single data frame.}
 }
 \value{
 An integer vector denoting cluster assignments of the new data points.
@@ -22,10 +23,11 @@ using the output object from the kamila function.
 }
 \details{
 A function that takes obj, the output from the kamila function, and newData,
-a list of length 2, where the first element is a data frame of continuous
-variables, and the second element is a data frame of categorical factors.
-Both data frames must have the same format as the original data used
-to construct the kamila clustering.
+which contains the new observations to classify. For mixed-type models,
+\code{newData} must be a list of length 2 (continuous data frame and
+categorical factor data frame). For single-modality models (continuous-only
+or categorical-only), \code{newData} can be supplied either as a data frame
+or as a list containing the single data frame.
 }
 \examples{
 # Generate toy data set

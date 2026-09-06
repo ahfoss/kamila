@@ -247,10 +247,11 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #    to 1 leave a variable's contribution unchanged. Weights between 0 and 1
 #    may not be comparable across continuous and categorical variables.
 
-#' KAMILA clustering of mixed-type data.
+#' KAMILA clustering of mixed-type, continuous-only, or categorical-only data.
 #'
 #' KAMILA is an iterative clustering method that equitably balances the
-#' contribution of continuous and categorical variables.
+#' contribution of continuous and categorical variables. It also natively
+#' supports continuous-only and categorical-only data.
 #'
 #' KAMILA (KAy-means for MIxed LArge data sets) is an iterative clustering
 #' method that equitably balances the contribution of the continuous and
@@ -258,10 +259,23 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' flexibly model spherical clusters in the continuous domain, and uses a
 #' multinomial model in the categorical domain.
 #'
+#' In addition to mixed-type data, KAMILA natively supports single-modality
+#' data:
+#' \itemize{
+#'   \item \strong{Continuous-only data}: When \code{catFactor = NULL}, KAMILA
+#'   clusters continuous data using semi-parametric radial kernel density
+#'   estimation (RKDE), selecting the best initialization via continuous
+#'   pseudo log-likelihood maximization.
+#'   \item \strong{Categorical-only data}: When \code{conVar = NULL}, KAMILA
+#'   clusters categorical data using fast C++ smoothed multinomial estimation,
+#'   selecting the best initialization via categorical log-likelihood
+#'   maximization.
+#' }
+#'
 #' Weighting scheme: If no weights are desired, set all weights to 1 (the
 #' default setting). Let a_1, ..., a_p denote the weights for p continuous
 #' variables. Let b_1, ..., b_q denote the weights for q categorical variables.
-#'  Currently, continuous weights are applied during the calculation of
+#' Currently, continuous weights are applied during the calculation of
 #' Euclidean distance, as:
 #        sqrt( a_1^2(x1-y1)^2 + ... + a_p^2(xp-yp)^2 )
 #' Categorical weights are applied to the log-likelihoods obtained by the
@@ -285,12 +299,14 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' the number of clusters selected.
 #' @export
 #' @importFrom stats runif sd setNames
-#' @param conVar A data frame of continuous variables.
-#' @param catFactor A data frame of factors.
+#' @param conVar An optional data frame of continuous variables. At least one of
+#'   \code{conVar} or \code{catFactor} must be specified.
+#' @param catFactor An optional data frame of factors. At least one of
+#'   \code{conVar} or \code{catFactor} must be specified.
 #' @param numClust The number of clusters returned by the algorithm.
 #' @param numInit The number of initializations used.
 #' @param conWeights A vector of continuous weights for the continuous variables.
-#' @param catWeights A vector of continuous weights for the categorical variables.
+#' @param catWeights A vector of weights for the categorical variables.
 #' @param maxIter The maximum number of iterations in each run.
 #' @param conInitMethod Character: The method used to initialize each run.
 #' @param catBw The bandwidth used for the categorical kernel.
@@ -328,12 +344,12 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #'   doi: 10.18637/jss.v083.i13
 
 kamila <- function(
-  conVar,
-  catFactor,
+  conVar = NULL,
+  catFactor = NULL,
   numClust,
   numInit,
-  conWeights = rep(1, ncol(conVar)),
-  catWeights = rep(1, ncol(catFactor)),
+  conWeights = NULL,
+  catWeights = NULL,
   maxIter = 25,
   conInitMethod = "runif",
   catBw = 0.025,
@@ -342,6 +358,68 @@ kamila <- function(
   numPredStrCvRun = 10,
   predStrThresh = 0.8
 ) {
+  hasCon <- !is.null(conVar)
+  hasCat <- !is.null(catFactor)
+
+  if (!hasCon && !hasCat) {
+    stop("At least one of conVar or catFactor must be specified.")
+  }
+
+  if (hasCon) {
+    if (!is.data.frame(conVar)) {
+      stop("Input dataset conVar must be a dataframe.")
+    }
+    if (ncol(conVar) < 1) {
+      stop("Input dataset conVar must have at least 1 column.")
+    }
+    numConVar <- ncol(conVar)
+    if (is.null(conWeights)) {
+      conWeights <- rep(1, numConVar)
+    }
+    if (length(conWeights) != numConVar) {
+      stop("Length of conWeights must equal number of continuous variables")
+    }
+    if (max(conWeights) > 1 || min(conWeights) < 0) {
+      stop("Weights must be in [0,1]")
+    }
+  } else {
+    numConVar <- 0
+    conWeights <- numeric(0)
+  }
+
+  if (hasCat) {
+    if (!is.data.frame(catFactor)) {
+      stop("Input dataset catFactor must be a dataframe.")
+    }
+    if (ncol(catFactor) < 1) {
+      stop("Input dataset catFactor must have at least 1 column.")
+    }
+    numCatVar <- ncol(catFactor)
+    if (is.null(catWeights)) {
+      catWeights <- rep(1, numCatVar)
+    }
+    if (length(catWeights) != numCatVar) {
+      stop("Length of catWeights must equal number of categorical variables")
+    }
+    if (max(catWeights) > 1 || min(catWeights) < 0) {
+      stop("Weights must be in [0,1]")
+    }
+  } else {
+    numCatVar <- 0
+    catWeights <- numeric(0)
+  }
+
+  if (hasCon && hasCat) {
+    if (nrow(catFactor) != nrow(conVar)) {
+      stop("Number of observations in con and cat vars don't match")
+    }
+    numObs <- nrow(conVar)
+  } else if (hasCon) {
+    numObs <- nrow(conVar)
+  } else {
+    numObs <- nrow(catFactor)
+  }
+
   if (calcNumClust == "none") {
     if (length(numClust) != 1) {
       stop('Input parameter numClust must be length 1 if calcNumClust == "none"')
@@ -351,61 +429,55 @@ kamila <- function(
     # Deprecated option
     returnResampler <- FALSE
 
-    # (0) extract data characteristics, checks
-    if (!is.data.frame(conVar) || !is.data.frame(catFactor)) {
-      stop("Input datasets must be dataframes")
+    if (hasCat) {
+      numLev <- sapply(catFactor, function(xx) length(levels(xx)))
+      catFactorNumeric <- matrix(
+        sapply(catFactor, as.numeric, simplify = TRUE),
+        nrow = numObs,
+        ncol = numCatVar
+      )
     }
-    if (max(c(conWeights, catWeights)) > 1 || min(c(conWeights, catWeights)) < 0) stop("Weights must be in [0,1]")
-
-    numObs <- nrow(conVar)
-    numConVar <- ncol(conVar)
-    if (nrow(catFactor) != numObs) {
-      stop("Number of observations in con and cat vars don't match")
-    }
-    numCatVar <- ncol(catFactor)
-
-    numLev <- sapply(catFactor, function(xx) length(levels(xx)))
-
-    # for later use, convert to numeric matrix by level codes
-    catFactorNumeric <- matrix(sapply(catFactor, as.numeric, simplify = TRUE), nrow = numObs, ncol = numCatVar)
 
     numIterVect <- rep(NaN, numInit)
     totalLogLikVect <- rep(NaN, numInit)
     catLogLikVect <- rep(NaN, numInit)
     winDistVect <- rep(NaN, numInit)
-    totalDist <- sum(dptmCpp(
-      pts = conVar,
-      myMeans = matrix(colMeans(conVar), nrow = 1),
-      wgts = conWeights # rep(1,numConVar)
-    ))
+    if (hasCon) {
+      totalDist <- sum(dptmCpp(
+        pts = conVar,
+        myMeans = matrix(colMeans(conVar), nrow = 1),
+        wgts = conWeights
+      ))
+    } else {
+      totalDist <- NaN
+    }
     objectiveVect <- rep(NaN, numInit)
 
     # for verbose output, list of memberships for each init, iter
     if (verbose) membLongList <- rep(list(list()), numInit)
 
-
-    # Apply continuous weighting vector directly to variables
-    # for (colInd in 1:ncol(conVar)) conVar[,colInd] <- conVar[,colInd] * conWeights[colInd]
-
     # (1) loop over each initialization
     for (init in 1:numInit) {
-      # initialize means; matrix size numClust X numConVar
-      means_i <- initMeans(conVar = conVar, method = conInitMethod, numClust = numClust)
-      # print(means_i)
+      if (hasCon) {
+        means_i <- initMeans(conVar = conVar, method = conInitMethod, numClust = numClust)
+      } else {
+        means_i <- NULL
+      }
 
-      # initialize probabilities; list length numCatVar of numClust X numLev matrices
-      # generate each level prob from dirichlet(alpha=rep(1,nlev))
-      # These are P( level | clust )
-      logProbsCond_i <- lapply(
-        numLev,
-        function(xx) {
-          matrix(
-            data = log(gtools::rdirichlet(n = numClust, alpha = rep(1, xx))),
-            nrow = numClust,
-            dimnames = list(clust = 1:numClust, level = 1:xx)
-          )
-        }
-      )
+      if (hasCat) {
+        logProbsCond_i <- lapply(
+          numLev,
+          function(xx) {
+            matrix(
+              data = log(gtools::rdirichlet(n = numClust, alpha = rep(1, xx))),
+              nrow = numClust,
+              dimnames = list(clust = 1:numClust, level = 1:xx)
+            )
+          }
+        )
+      } else {
+        logProbsCond_i <- list()
+      }
 
       # initialize structures for iterative procedure
       membOld <- membNew <- rep(0, numObs)
@@ -413,112 +485,75 @@ kamila <- function(
       degenerateSoln <- FALSE
 
       # Loop until convergence
-      # loop for minimum two iterations, while all memberships are NOT UNchanged, while still under max # iter
       while (
         ((numIter < 3) || !all(membOld == membNew)) &&
           (numIter < maxIter)
       ) {
         numIter <- numIter + 1
 
-        # 2 calc weighted euclidean distances to means
-        # result is numObs X numClust matrix
+        if (hasCon) {
+          dist_i <- dptmCpp(pts = conVar, myMeans = means_i, wgts = conWeights)
+          minDist_i <- rowMin(dist_i)
 
-        dist_i <- dptmCpp(pts = conVar, myMeans = means_i, wgts = conWeights)
-        # dist_i <- dptmCpp(pts=conVar,myMeans=means_i,wgts=rep(1,numConVar)) # no weights
+          logDistRadDens_vec <- log(
+            radialKDE(
+              radii = minDist_i,
+              evalPoints = c(dist_i),
+              pdim = numConVar,
+              returnFun = returnResampler
+            )$kdes
+          )
+          logDistRadDens_i <- matrix(
+            logDistRadDens_vec,
+            nrow = numObs,
+            ncol = numClust
+          )
+        }
 
-        # 3 extract min distances
-        minDist_i <- rowMin(dist_i)
+        if (hasCat) {
+          individualLogProbs <- getIndividualLogProbs(
+            catFactorNum = catFactorNumeric,
+            catWeights = catWeights,
+            logProbsCond_i = logProbsCond_i
+          )
+          catLogLiks <- Reduce(f = "+", x = individualLogProbs)
+        }
 
-        # 4 RKDE of min distances
-        # 5 Evaluate all distances with kde
-        logDistRadDens_vec <- log(
-          radialKDE(
-            radii = minDist_i,
-            evalPoints = c(dist_i),
-            pdim = numConVar,
-            returnFun = returnResampler
-          )$kdes
-        )
-        logDistRadDens_i <- matrix(
-          logDistRadDens_vec,
-          nrow = numObs,
-          ncol = numClust
-        )
+        if (hasCon && hasCat) {
+          allLogLiks <- logDistRadDens_i + catLogLiks
+        } else if (hasCon) {
+          allLogLiks <- logDistRadDens_i
+        } else {
+          allLogLiks <- catLogLiks
+        }
 
-
-        # 6 categorical likelihoods
-        # this step takes the log probs for each level of each
-        # categorical variable (list length Q, elements k X l_q)
-        # and creates a list of length Q, each element is n X k
-        # giving the log prob for nth observed level for variable q, cluster k
-
-        # New Rcpp method
-        individualLogProbs <- getIndividualLogProbs(
-          catFactorNum = catFactorNumeric,
-          catWeights = catWeights,
-          logProbsCond_i = logProbsCond_i
-        )
-
-        # 7 log likelihood eval for each point, for each of k clusters (WEIGHTED)
-        # output is n X k matrix of log likelihoods
-        catLogLiks <- Reduce(f = "+", x = individualLogProbs)
-
-        # sumMatList is cpp function that replaces the above; not clear if faster than Reduce
-        # catLogLiks <- sumMatList(individualLogProbs)
-
-        # scaling relative con to cat likelihood by weights
-        # allLogLiks <- mean(conWeights)*logDistRadDens_i + catLogLiks
-
-        # NOT scaling relative to weights
-        allLogLiks <- logDistRadDens_i + catLogLiks
-
-        # 8 partition data into clusters
+        # partition data into clusters
         membOld <- membNew
-
-        # membNew <- apply(allLogLiks,1,which.max)
         membNew <- rowMaxInds(allLogLiks)
 
-        # 9 calculate new means: k X p matrix
-        # means_i <- as.matrix(aggregate(x=conVar,by=list(membNew),FUN=mean)[,-1])
-        means_i <- aggregateMeans(
-          conVar = as.matrix(conVar),
-          membNew = membNew,
-          kk = numClust
-        )
+        # calculate new means / probabilities
+        if (hasCon) {
+          means_i <- aggregateMeans(
+            conVar = as.matrix(conVar),
+            membNew = membNew,
+            kk = numClust
+          )
+        }
 
-        # 10.1 new joint probability table, possibly with kernel estimator
-        # 10.2 Also calculate conditional probabilities: P(lev | clust)
+        if (hasCat) {
+          jointProbsList <- jointTabSmoothedList(catFactorNumeric, membNew, numLev, catBw, kk = numClust)
+          logProbsCond_i <- lapply(jointProbsList, FUN = function(xx) log(xx / rowSums(xx)))
+        }
 
-        # New Rcpp implementation
-        jointProbsList <- jointTabSmoothedList(catFactorNumeric, membNew, numLev, catBw, kk = numClust)
-        logProbsCond_i <- lapply(jointProbsList, FUN = function(xx) log(xx / rowSums(xx)))
-
-        ### Old approach:
-        # logProbsCond_i <- lapply(
-        #  X = as.list(catFactor)
-        # ,FUN = function(xx) {
-        #    jointTab <- myCatKern(
-        #      kdat=data.frame(clust=membNew,level=xx)
-        #     ,bw=catBw
-        #     ,tabOnly=TRUE
-        #    )
-        #    #jointTab <- table(membNew,xx) # without kernel
-        #    return( log(jointTab / rowSums(jointTab)) )
-        #  }
-        # )
-
-        # store every solution if verbose=true
         if (verbose) {
           membLongList[[init]][[numIter]] <- membOld
         }
 
-        # 11 test for degenerate solution, calculate total log-likelihood (WEIGHTED)
         if (length(unique(membNew)) < numClust) {
           degenerateSoln <- TRUE
           break
         }
       }
-
 
       # Store log likelihood for each initialization
       if (degenerateSoln) {
@@ -527,18 +562,23 @@ kamila <- function(
         totalLogLikVect[init] <- sum(rowMax(allLogLiks))
       }
 
-      # store num init
       numIterVect[init] <- numIter
 
       # other useful internal measures of cluster quality
-      catLogLikVect[init] <- sum(rowMax(catLogLiks))
-      winDistVect[init] <- sum(dist_i[cbind(1:numObs, membNew)])
-      winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
-      if (winToBetRat < 0) winToBetRat <- 100
-      # Note catLogLik is negative, larger is better
-      # Note WSS/BSS is positive, with smaller better
-      # Thus, we maximize their product.
-      objectiveVect[init] <- winToBetRat * catLogLikVect[init]
+      if (hasCat) catLogLikVect[init] <- sum(rowMax(catLogLiks))
+      if (hasCon) {
+        winDistVect[init] <- sum(dist_i[cbind(1:numObs, membNew)])
+        winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
+        if (winToBetRat < 0) winToBetRat <- 100
+      }
+
+      if (hasCon && hasCat) {
+        objectiveVect[init] <- winToBetRat * catLogLikVect[init]
+      } else if (hasCon) {
+        objectiveVect[init] <- totalLogLikVect[init]
+      } else {
+        objectiveVect[init] <- if (degenerateSoln) -Inf else catLogLikVect[init]
+      }
 
       # Store current solution if objective beats all others
       if (
@@ -548,34 +588,39 @@ kamila <- function(
         finalLogLik <- totalLogLikVect[init]
         finalObj <- objectiveVect[init]
         finalMemb <- membNew
-        finalCenters <- matrix(
-          data = as.matrix(means_i),
-          nrow = nrow(means_i),
-          ncol = numConVar,
-          dimnames = list(
-            cluster = paste("Clust", seq_len(nrow(means_i))),
-            variableMean = paste("Mean", 1:numConVar)
+        if (hasCon) {
+          finalCenters <- matrix(
+            data = as.matrix(means_i),
+            nrow = nrow(means_i),
+            ncol = numConVar,
+            dimnames = list(
+              cluster = paste("Clust", seq_len(nrow(means_i))),
+              variableMean = paste("Mean", seq_len(numConVar))
+            )
           )
-        )
-        # rescale by weights
-        #    finalCenters <- finalCenters * matrix(rep(1/conWeights,times=numClust),byrow=TRUE,nrow=numClust)
-        finalProbs <- lapply(logProbsCond_i, exp)
-        names(finalProbs) <- paste("Categorical Variable", 1:numCatVar)
+        } else {
+          finalCenters <- NULL
+        }
+
+        if (hasCat) {
+          finalProbs <- lapply(logProbsCond_i, exp)
+          names(finalProbs) <- paste("Categorical Variable", seq_len(numCatVar))
+        } else {
+          finalProbs <- list()
+        }
         finalClustSize <- table(membNew)
       }
 
-      # store last membership also
       if (verbose) membLongList[[init]][[numIter + 1]] <- membNew
     }
-
 
     # 12 Prepare output data structure
     if (verbose) {
       optionalOutput <- list(
         totalLogLikVect = totalLogLikVect,
-        catLogLikVect = catLogLiks,
-        winDistVect = winDistVect,
-        totalDist = totalDist,
+        catLogLikVect = if (hasCat) catLogLiks else NULL,
+        winDistVect = if (hasCon) winDistVect else NULL,
+        totalDist = if (hasCon) totalDist else NULL,
         objectiveVect = objectiveVect,
         membLongList = membLongList
       )
@@ -595,7 +640,6 @@ kamila <- function(
       catBw = catBw,
       verbose = verbose
     )
-
 
     return(
       list(
@@ -628,7 +672,7 @@ kamila <- function(
       warning("Input parameter numClust is a scalar; the prediction strength
         method is probably not appropriate or desired")
     }
-    if (any(numClust > floor(nrow(conVar) / 2))) {
+    if (any(numClust > floor(numObs / 2))) {
       stop("The number of clusters in input parameter numClust cannot exceed
         one-half of the sample size.")
     }
@@ -664,17 +708,21 @@ kamila <- function(
     )
 
     # Implement CV procedure
-    numObs <- nrow(conVar)
     numInTest <- floor(numObs / 2)
     for (cvRun in 1:numPredStrCvRun) {
       for (ithNcInd in seq_along(numClust)) {
         # generate cv indices
         testInd <- sample(numObs, size = numInTest, replace = FALSE)
 
+        testCon <- if (hasCon) conVar[testInd, , drop = FALSE] else NULL
+        testCat <- if (hasCat) catFactor[testInd, , drop = FALSE] else NULL
+        trainCon <- if (hasCon) conVar[-testInd, , drop = FALSE] else NULL
+        trainCat <- if (hasCat) catFactor[-testInd, , drop = FALSE] else NULL
+
         # cluster test data
         testClust <- kamila(
-          conVar = conVar[testInd, , drop = FALSE],
-          catFactor = catFactor[testInd, , drop = FALSE],
+          conVar = testCon,
+          catFactor = testCat,
           numClust = numClust[ithNcInd],
           numInit = numInit,
           conWeights = conWeights,
@@ -687,8 +735,8 @@ kamila <- function(
 
         # cluster training data
         trainClust <- kamila(
-          conVar = conVar[-testInd, , drop = FALSE],
-          catFactor = catFactor[-testInd, , drop = FALSE],
+          conVar = trainCon,
+          catFactor = trainCat,
           numClust = numClust[ithNcInd],
           numInit = numInit,
           conWeights = conWeights,
@@ -699,12 +747,6 @@ kamila <- function(
           verbose = FALSE
         )
 
-        # Generate a list of indices for each cluster within test data.
-        # Note there are two index systems floating around:
-        # Indices of the full data set slicing out test set (testInd)
-        # and indices of cluster membership within test data (testIndList).
-        # If the length of the outputs are equal, mapply defaults to returning
-        # a matrix unless default of SIMPLIFY parameter is changed to FALSE.
         testIndList <- mapply(
           x = 1:numClust[ithNcInd],
           function(x) which(testClust$finalMemb == x),
@@ -712,9 +754,17 @@ kamila <- function(
         )
 
         # Allocate test data based on training clusters.
+        testDataClassify <- if (hasCon && hasCat) {
+          list(testCon, testCat)
+        } else if (hasCon) {
+          testCon
+        } else {
+          testCat
+        }
+
         teIntoTr <- classifyKamila(
           trainClust,
-          list(conVar[testInd, , drop = FALSE], catFactor[testInd, , drop = FALSE])
+          testDataClassify
         )
 
         # Initialize D matrix.
@@ -740,11 +790,6 @@ kamila <- function(
         for (cl in 1:numClust[ithNcInd]) {
           clustN <- length(testIndList[[cl]])
           if (clustN > 1) {
-            ##################################
-            # Construct dMat separately within each cluster
-            # initialize dMat_cl
-            # dMat_cl[i,j] <- teIntoTr[testIndList[[cl]][i]] == teIntoTr[testIndList[[cl]][j]]
-            ##################################
             for (i in 1:(clustN - 1)) {
               for (j in (i + 1):clustN) {
                 psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
@@ -761,9 +806,6 @@ kamila <- function(
         }
 
         # Calculate and update prediction strength results.
-        # Remove NaN/NAs for empty clusters.
-        # min(...,na.rm=T) returns Inf if entire vector is NA.
-        # Workaround is simple but WEIRD behavior.
         psCvRes[ithNcInd, cvRun] <- ifelse(
           test = all(is.na(psProps)),
           yes = NA,
@@ -841,15 +883,17 @@ cyclicalCoding <- function(invar) {
 #' using the output object from the kamila function.
 #'
 #' A function that takes obj, the output from the kamila function, and newData,
-#' a list of length 2, where the first element is a data frame of continuous
-#' variables, and the second element is a data frame of categorical factors.
-#' Both data frames must have the same format as the original data used
-#' to construct the kamila clustering.
+#' which contains the new observations to classify. For mixed-type models,
+#' \code{newData} must be a list of length 2 (continuous data frame and
+#' categorical factor data frame). For single-modality models (continuous-only
+#' or categorical-only), \code{newData} can be supplied either as a data frame
+#' or as a list containing the single data frame.
 #' @export
 #' @param obj An output object from the kamila function.
-#' @param newData A list of length 2, with first element a data frame of
-#'   continuous variables, and second element a data frame of categorical
-#'   factors.
+#' @param newData For mixed-type data, a list of length 2, with first element
+#'   a data frame of continuous variables, and second element a data frame of
+#'   categorical factors. For continuous-only or categorical-only models, either
+#'   a single data frame or a list containing the single data frame.
 #' @return An integer vector denoting cluster assignments of the new data points.
 #' @examples
 #' # Generate toy data set
@@ -875,59 +919,116 @@ cyclicalCoding <- function(invar) {
 #'   Hadoop. Journal of Statistical Software, 83(13). 2018.
 #'   doi: 10.18637/jss.v083.i13
 classifyKamila <- function(obj, newData) {
-  # if (length(newData) == 3) {
-  #  cyclicRecoded <- as.data.frame(lapply(newData[[3]],cyclicalCoding))
-  #  newCon <- as.data.frame(cbind(newData[[1]],cyclicRecoded))
-  # } else
-  if (length(newData) == 2) {
-    newCon <- newData[[1]]
-  } else {
-    stop("Error in function classifyKamila: newData must be list of length 2")
-  }
-  newCatFactor <- newData[[2]]
+  hasCon <- !is.null(obj$input$conVar) && ncol(obj$input$conVar) > 0
+  hasCat <- !is.null(obj$input$catFactor) && ncol(obj$input$catFactor) > 0
 
-  ########################################
-  # 1) reconstruct classification rule
-  ########################################
-  # calculate (weighted) distance to means
-  distances <- with(obj, dptmCpp(
-    pts = input$conVar,
-    myMeans = finalCenters,
-    wgts = input$conWeights
-  ))
-  minDistances <- apply(distances, 1, min)
-
-  ########################################
-  # 2) classify new points
-  ########################################
-
-  # calculate distances to each mean from each new point
-  newDistances <- with(obj, dptmCpp(
-    pts = newCon,
-    myMeans = finalCenters,
-    wgts = input$conWeights
-  ))
-
-  # calculate continuous log density KD estimates
-  logRadDens <- matrix(
-    log(radialKDE(radii = minDistances, evalPoints = c(newDistances), pdim = ncol(newCon))$kdes),
-    nrow = nrow(newCon),
-    ncol = nrow(obj$finalCenters)
-  )
-
-  # calculate categorical probabilities
-  logClustProbs <- lapply(obj$finalProbs, log)
-  logCatKProbs <- with(obj, lapply(
-    X = seq_len(ncol(newCatFactor)),
-    FUN = function(ind) {
-      input$catWeights[ind] * t(logClustProbs[[ind]][, as.numeric(newCatFactor[, ind]), drop = FALSE])
+  if (is.list(newData) && !is.data.frame(newData)) {
+    if (length(newData) == 2) {
+      newCon <- newData[[1]]
+      newCatFactor <- newData[[2]]
+    } else if (length(newData) == 1) {
+      if (hasCon && !hasCat) {
+        newCon <- newData[[1]]
+        newCatFactor <- NULL
+      } else if (!hasCon && hasCat) {
+        newCon <- NULL
+        newCatFactor <- newData[[1]]
+      } else {
+        stop("Error in function classifyKamila: newData must be list of length 2 for mixed data")
+      }
+    } else {
+      stop("Error in function classifyKamila: newData list must have length 1 or 2")
     }
-  )) # this is a list of q matrices, each n x k; with elements log-likelihood
+  } else if (is.data.frame(newData)) {
+    if (hasCon && !hasCat) {
+      newCon <- newData
+      newCatFactor <- NULL
+    } else if (!hasCon && hasCat) {
+      newCon <- NULL
+      newCatFactor <- newData
+    } else {
+      stop("Error in function classifyKamila: newData must be list of length 2 for mixed data")
+    }
+  } else {
+    stop("Error in function classifyKamila: newData must be a data frame or list of data frames")
+  }
 
-  catLogLiks <- Reduce(f = "+", x = logCatKProbs)
+  if (hasCon) {
+    if (!is.data.frame(newCon)) {
+      stop("Error in function classifyKamila: elements of newData must be data frames")
+    }
+    if (ncol(newCon) < 1) {
+      stop("Error in function classifyKamila: data frames in newData must have at least 1 column")
+    }
+    if (ncol(newCon) != ncol(obj$input$conVar)) {
+      stop(paste(
+        "Error in function classifyKamila: number of continuous columns in newData",
+        "does not match model"
+      ))
+    }
+  }
 
-  # maximum "likelihood" classification
-  combinedLogLik <- logRadDens + catLogLiks
+  if (hasCat) {
+    if (!is.data.frame(newCatFactor)) {
+      stop("Error in function classifyKamila: elements of newData must be data frames")
+    }
+    if (ncol(newCatFactor) < 1) {
+      stop("Error in function classifyKamila: data frames in newData must have at least 1 column")
+    }
+    if (ncol(newCatFactor) != ncol(obj$input$catFactor)) {
+      stop(paste(
+        "Error in function classifyKamila: number of categorical columns in newData",
+        "does not match model"
+      ))
+    }
+  }
+
+  if (hasCon && hasCat) {
+    if (nrow(newCon) != nrow(newCatFactor)) {
+      stop("Error in function classifyKamila: number of observations in con and cat vars don't match")
+    }
+  }
+
+  if (hasCon) {
+    distances <- with(obj, dptmCpp(
+      pts = input$conVar,
+      myMeans = finalCenters,
+      wgts = input$conWeights
+    ))
+    minDistances <- apply(distances, 1, min)
+
+    newDistances <- with(obj, dptmCpp(
+      pts = newCon,
+      myMeans = finalCenters,
+      wgts = input$conWeights
+    ))
+
+    logRadDens <- matrix(
+      log(radialKDE(radii = minDistances, evalPoints = c(newDistances), pdim = ncol(newCon))$kdes),
+      nrow = nrow(newCon),
+      ncol = nrow(obj$finalCenters)
+    )
+  }
+
+  if (hasCat) {
+    logClustProbs <- lapply(obj$finalProbs, log)
+    logCatKProbs <- with(obj, lapply(
+      X = seq_len(ncol(newCatFactor)),
+      FUN = function(ind) {
+        input$catWeights[ind] * t(logClustProbs[[ind]][, as.numeric(newCatFactor[, ind]), drop = FALSE])
+      }
+    ))
+
+    catLogLiks <- Reduce(f = "+", x = logCatKProbs)
+  }
+
+  if (hasCon && hasCat) {
+    combinedLogLik <- logRadDens + catLogLiks
+  } else if (hasCon) {
+    combinedLogLik <- logRadDens
+  } else {
+    combinedLogLik <- catLogLiks
+  }
 
   membership <- as.numeric(apply(combinedLogLik, 1, which.max))
 
