@@ -68,4 +68,20 @@ test_that("nclust1x and nclustFull run without error", {
   # high psThresh fallback in nclustFull
   resFullHigh <- nclustFull(conData, kmax = 3, psThresh = 0.999, nrep = 2)
   expect_equal(resFullHigh$thresh, 0.999)
+
+  # nclustFull with list input, getSubsetMix, and low psThresh
+  listData <- list(
+    data.frame(x = rnorm(20), y = rnorm(20), stringsAsFactors = TRUE),
+    data.frame(f = factor(rep(c("a", "b"), 10)), stringsAsFactors = TRUE)
+  )
+  resFullLow <- nclustFull(
+    listData,
+    clustMethod = kamilaMethod,
+    classMethod = function(res, newData) classifyKamila(res, newData),
+    subsetMethod = getSubsetMix,
+    kmax = 3,
+    psThresh = 0.01,
+    nrep = 2
+  )
+  expect_true(resFullLow$k %in% c(2, 3))
 })
