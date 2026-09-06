@@ -63,3 +63,18 @@ test_that('KAMILA throws error if numClust is length > 1 with calcNumClust=="non
     'Input parameter numClust must be length 1 if calcNumClust == "none"'
   )
 })
+
+test_that("KAMILA prediction strength works with single-variable catFactor data frame (Issue #14)", {
+  set.seed(123)
+  res <- kamila(
+    conVar = data.frame(rnorm(20), rnorm(20)),
+    catFactor = data.frame(factor(sample(1:3, size = 20, replace = TRUE))),
+    numClust = 2:3,
+    numInit = 3,
+    maxIter = 10,
+    calcNumClust = "ps",
+    numPredStrCvRun = 2
+  )
+  expect_true(is.list(res))
+  expect_true(res$nClust$bestNClust %in% 2:3)
+})

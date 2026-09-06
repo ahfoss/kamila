@@ -18,11 +18,13 @@ gmsClust(
 \arguments{
 \item{conData}{A data frame of continuous variables.}
 
-\item{catData}{A data frame of categorical variables; the allowable variable types depend on the specific clustering function used.}
+\item{catData}{A data frame of categorical variables; the allowable variable
+types depend on the specific clustering function used.}
 
 \item{nclust}{An integer specifying the number of clusters.}
 
-\item{searchDensity}{An integer determining the number of distinct cluster weightings evaluated in the brute-force search.}
+\item{searchDensity}{An integer determining the number of distinct cluster
+weightings evaluated in the brute-force search.}
 
 \item{clustFun}{The clustering function to be applied.}
 
@@ -35,9 +37,12 @@ gmsClust(
 \value{
 A list containing the following results objects:
 \item{results}{A results object corresponding to the base clustering algorithm}
-\item{objFun}{A numeric vector of length \code{searchDensity} containing the values of the objective function for each weight used}
-\item{Qcon}{A numeric vector of length \code{searchDensity} containing the values of the continuous component of the objective function}
-\item{Qcon}{A numeric vector of length \code{searchDensity} containing the values of the categorical component of the objective function}
+\item{objFun}{A numeric vector of length \code{searchDensity} containing the
+  values of the objective function for each weight used}
+\item{Qcon}{A numeric vector of length \code{searchDensity} containing the
+  values of the continuous component of the objective function}
+\item{Qcat}{A numeric vector of length \code{searchDensity} containing the
+  values of the categorical component of the objective function}
 \item{bestInd}{The index of the most successful run}
 \item{weights}{A numeric vector of length \code{searchDensity} containing the continuous weights used}
 }
@@ -51,7 +56,7 @@ the optimal weighting for continuous vs categorical variables. This
 implementation admits an arbitrary clustering function and arbitrary
 objective functions for continuous and categorical variables.
 
-The input parameter clustFun must be a function accepting inputs 
+The input parameter clustFun must be a function accepting inputs
 (conData, catData, conWeight, nclust, ...) and returning a list containing
 (at least) the elements cluster, conCenters, and catCenters. The list element
 "cluster" contains cluster memberships denoted by the integers 1:nclust. The
@@ -66,18 +71,23 @@ data frame rows as input and return a scalar distance measure.
 # Generate toy data set with poor quality categorical variables and good
 # quality continuous variables.
 set.seed(1)
-dat <- genMixedData(200, nConVar=2, nCatVar=2, nCatLevels=4, nConWithErr=2,
-  nCatWithErr=2, popProportions=c(.5,.5), conErrLev=0.3, catErrLev=0.8)
+dat <- genMixedData(200,
+  nConVar = 2, nCatVar = 2, nCatLevels = 4, nConWithErr = 2,
+  nCatWithErr = 2, popProportions = c(.5, .5), conErrLev = 0.3, catErrLev = 0.8
+)
 catDf <- dummyCodeFactorDf(data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE))
 conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE)
 
-msRes <- gmsClust(conDf, catDf, nclust=2)
+msRes <- gmsClust(conDf, catDf, nclust = 2)
 
 table(msRes$results$cluster, dat$trueID)
 }
 }
 \references{
-Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
+Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and
+  Hadoop. Journal of Statistical Software, 83(13). 2018.
+  doi: 10.18637/jss.v083.i13
 
-Modha DS, Spangler WS; Feature Weighting in k-Means Clustering. Machine Learning, 52(3). 2003. doi: 10.1023/a:1024016609528
+Modha DS, Spangler WS; Feature Weighting in k-Means Clustering.
+  Machine Learning, 52(3). 2003. doi: 10.1023/a:1024016609528
 }

@@ -12,14 +12,16 @@ importFrom(KernSmooth,bkde)
 importFrom(Rcpp,sourceCpp)
 importFrom(abind,abind)
 importFrom(gtools,rdirichlet)
-importFrom(stats,approxfun)
-importFrom(stats,bw.nrd0)
-importFrom(stats,kmeans)
-importFrom(stats,mahalanobis)
-importFrom(stats,qnorm)
-importFrom(stats,quantile)
-importFrom(stats,rnorm)
-importFrom(stats,runif)
-importFrom(stats,sd)
-importFrom(stats,setNames)
+importFrom(stats,
+  approxfun,
+  bw.nrd0,
+  kmeans,
+  mahalanobis,
+  qnorm,
+  quantile,
+  rnorm,
+  runif,
+  sd,
+  setNames
+)
 useDynLib(kamila)

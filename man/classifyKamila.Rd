@@ -9,7 +9,9 @@ classifyKamila(obj, newData)
 \arguments{
 \item{obj}{An output object from the kamila function.}
 
-\item{newData}{A list of length 2, with first element a data frame of continuous variables, and second element a data frame of categorical factors.}
+\item{newData}{A list of length 2, with first element a data frame of
+continuous variables, and second element a data frame of categorical
+factors.}
 }
 \value{
 An integer vector denoting cluster assignments of the new data points.
@@ -28,15 +30,17 @@ to construct the kamila clustering.
 \examples{
 # Generate toy data set
 set.seed(1234)
-dat1 <- genMixedData(400, nConVar = 2, nCatVar = 2, nCatLevels = 4,
-  nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5,.5),
-  conErrLev = 0.2, catErrLev = 0.2)
+dat1 <- genMixedData(400,
+  nConVar = 2, nCatVar = 2, nCatLevels = 4,
+  nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5, .5),
+  conErrLev = 0.2, catErrLev = 0.2
+)
 # Partition the data into training/test set
 trainingIds <- sample(nrow(dat1$conVars), size = 300, replace = FALSE)
-catTrain <- data.frame(apply(dat1$catVars[trainingIds,], 2, factor), stringsAsFactors = TRUE)
-conTrain <- data.frame(scale(dat1$conVars)[trainingIds,], stringsAsFactors = TRUE)
-catTest <- data.frame(apply(dat1$catVars[-trainingIds,], 2, factor), stringsAsFactors = TRUE)
-conTest <- data.frame(scale(dat1$conVars)[-trainingIds,], stringsAsFactors = TRUE)
+catTrain <- data.frame(apply(dat1$catVars[trainingIds, ], 2, factor), stringsAsFactors = TRUE)
+conTrain <- data.frame(scale(dat1$conVars)[trainingIds, ], stringsAsFactors = TRUE)
+catTest <- data.frame(apply(dat1$catVars[-trainingIds, ], 2, factor), stringsAsFactors = TRUE)
+conTest <- data.frame(scale(dat1$conVars)[-trainingIds, ], stringsAsFactors = TRUE)
 # Run the kamila clustering procedure on the training set
 kamilaObj <- kamila(conTrain, catTrain, numClust = 2, numInit = 10)
 table(dat1$trueID[trainingIds], kamilaObj$finalMemb)
@@ -45,5 +49,7 @@ kamilaPred <- classifyKamila(kamilaObj, list(conTest, catTest))
 table(dat1$trueID[-trainingIds], kamilaPred)
 }
 \references{
-Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
+Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and
+  Hadoop. Journal of Statistical Software, 83(13). 2018.
+  doi: 10.18637/jss.v083.i13
 }
