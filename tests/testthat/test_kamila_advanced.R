@@ -107,6 +107,57 @@ test_that("classifyKamila works and validates inputs", {
 
   # Invalid list length error
   expect_error(classifyKamila(kamObj, list(conVar[1:5, ])), "must be list of length 2")
+
+  # Invalid obj error
+  expect_error(classifyKamila(list(), newData), "valid kamila object")
+
+  # Non-dataframe continuous error
+  expect_error(classifyKamila(kamObj, list("not_df", catFactor[1:5, , drop = FALSE])), "must be a data frame or matrix")
+
+  # Non-dataframe categorical error
+  expect_error(classifyKamila(kamObj, list(conVar[1:5, ], c("A", "B"))), "must be a data frame")
+
+  # Mismatched observation count error
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, ], catFactor[1:3, , drop = FALSE])),
+    "same number of observations"
+  )
+
+  # Mismatched continuous column count error
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, 1, drop = FALSE], catFactor[1:5, , drop = FALSE])),
+    "continuous variables"
+  )
+
+  # Mismatched categorical column count error
+  expect_error(
+    classifyKamila(
+      kamObj,
+      list(conVar[1:5, ], data.frame(f1 = catFactor$f1[1:5], f2 = catFactor$f1[1:5]))
+    ),
+    "categorical variables"
+  )
+
+  # Issue 16: Unseen categorical level error
+  badCat <- data.frame(f1 = factor(c("A", "C", "B")), stringsAsFactors = TRUE)
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:3, ], badCat)),
+    "Categorical variable 'f1' \\(column 1\\) contains level\\(s\\) not present in training data: 'C'"
+  )
+
+  # Unseen level error without column names
+  badCatNoName <- data.frame(factor(c("A", "D")), stringsAsFactors = TRUE)
+  colnames(badCatNoName) <- ""
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:2, ], badCatNoName)),
+    "Categorical variable column 1 contains level\\(s\\) not present in training data: 'D'"
+  )
+
+  # Test data with a subset of levels or reordered levels is correctly handled
+  subsetCat <- data.frame(f1 = factor(c("B", "B"), levels = c("B")), stringsAsFactors = TRUE)
+  predSubset <- classifyKamila(kamObj, list(conVar[1:2, ], subsetCat))
+  expect_equal(length(predSubset), 2)
+  expect_true(all(predSubset %in% c(1, 2)))
 })
 
 test_that("myCatKern and sumMatList Rcpp helper function work", {

@@ -875,16 +875,71 @@ cyclicalCoding <- function(invar) {
 #'   Hadoop. Journal of Statistical Software, 83(13). 2018.
 #'   doi: 10.18637/jss.v083.i13
 classifyKamila <- function(obj, newData) {
-  # if (length(newData) == 3) {
-  #  cyclicRecoded <- as.data.frame(lapply(newData[[3]],cyclicalCoding))
-  #  newCon <- as.data.frame(cbind(newData[[1]],cyclicRecoded))
-  # } else
-  if (length(newData) == 2) {
-    newCon <- newData[[1]]
-  } else {
+  if (!is.list(obj) || is.null(obj$input) ||
+        is.null(obj$finalCenters) || is.null(obj$finalProbs)) {
+    stop("Error in function classifyKamila: obj must be a valid kamila object")
+  }
+  if (!is.list(newData) || length(newData) != 2) {
     stop("Error in function classifyKamila: newData must be list of length 2")
   }
+
+  newCon <- newData[[1]]
   newCatFactor <- newData[[2]]
+
+  if (!is.data.frame(newCon) && !is.matrix(newCon)) {
+    stop("Error in function classifyKamila: newData[[1]] must be a data frame or matrix")
+  }
+  if (!is.data.frame(newCatFactor)) {
+    stop("Error in function classifyKamila: newData[[2]] must be a data frame")
+  }
+
+  newCon <- as.data.frame(newCon)
+
+  if (nrow(newCon) != nrow(newCatFactor)) {
+    stop(
+      "Error in function classifyKamila: ",
+      "continuous and categorical newData must have same number of observations"
+    )
+  }
+  if (ncol(newCon) != ncol(obj$input$conVar)) {
+    stop(
+      "Error in function classifyKamila: ",
+      "number of continuous variables in newData does not match training data"
+    )
+  }
+  if (ncol(newCatFactor) != ncol(obj$input$catFactor)) {
+    stop(
+      "Error in function classifyKamila: ",
+      "number of categorical variables in newData does not match training data"
+    )
+  }
+
+  numCatVar <- ncol(newCatFactor)
+  for (ind in seq_len(numCatVar)) {
+    trLevels <- levels(obj$input$catFactor[[ind]])
+    colName <- colnames(newCatFactor)[ind]
+    varDesc <- if (!is.null(colName) && nchar(colName) > 0) {
+      paste0("'", colName, "' (column ", ind, ")")
+    } else {
+      paste0("column ", ind)
+    }
+
+    valChar <- as.character(newCatFactor[[ind]])
+    uniqVals <- unique(valChar[!is.na(valChar)])
+    unseenLevels <- setdiff(uniqVals, trLevels)
+
+    if (length(unseenLevels) > 0) {
+      formattedLevels <- paste(paste0("'", unseenLevels, "'"), collapse = ", ")
+      stop(
+        "Error in function classifyKamila: Categorical variable ",
+        varDesc,
+        " contains level(s) not present in training data: ",
+        formattedLevels
+      )
+    }
+
+    newCatFactor[[ind]] <- factor(newCatFactor[[ind]], levels = trLevels)
+  }
 
   ########################################
   # 1) reconstruct classification rule
