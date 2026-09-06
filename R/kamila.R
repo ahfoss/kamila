@@ -407,10 +407,6 @@ kamila <- function(
         }
       )
 
-
-      # print('logProbsCond_i')
-      # print(logProbsCond_i)
-
       # initialize structures for iterative procedure
       membOld <- membNew <- rep(0, numObs)
       numIter <- 0
@@ -423,27 +419,12 @@ kamila <- function(
           (numIter < maxIter)
       ) {
         numIter <- numIter + 1
-        # print(paste('Iteration',numIter))
-
-        # print('conVar')
-        # str(conVar)
-        # print('means_i')
-        # str(means_i)
-        # print('conWeights')
-        # str(conWeights)
-        # print('initMeans Structure')
-        # str(initMeans(conVar,conInitMethod,2))
-        # str(initMeans(cbind(conVar,conVar),conInitMethod,2))
 
         # 2 calc weighted euclidean distances to means
         # result is numObs X numClust matrix
-        # str(means_i)
-        # str(conVar)
 
         dist_i <- dptmCpp(pts = conVar, myMeans = means_i, wgts = conWeights)
         # dist_i <- dptmCpp(pts=conVar,myMeans=means_i,wgts=rep(1,numConVar)) # no weights
-        # print('Distance X cluster matrix')
-        # print(head(dist_i,n=15))
 
         # 3 extract min distances
         minDist_i <- rowMin(dist_i)
@@ -525,23 +506,6 @@ kamila <- function(
         #    return( log(jointTab / rowSums(jointTab)) )
         #  }
         # )
-
-        # print current plot and metrics, if requested
-        # if (FALSE) { # (verbose) {
-        #  catLikTmp <- sum(rowMax(catLogLiks))
-        #  winDistTmp <- sum(dist_i[cbind(1:numObs, membNew)])
-        #  winToBetRatTmp <- winDistTmp / (totalDist - winDistTmp)
-        #  if (winToBetRatTmp < 0) winToBetRatTmp <- 100
-        #  objectiveTmp <- winToBetRatTmp * catLikTmp
-        #
-        #  plot(conVar[, 1], conVar[, 2], col = membNew, main = paste("Init", init, "; Iter", numIter))
-        #  points(means_i, pch = 18, col = "blue", cex = 2)
-        #  legend("topleft", legend = c(
-        #    paste("catLik =", round(catLikTmp, 2)),
-        #    paste("w/b dist =", round(winDistTmp / (totalDist - winDistTmp), 2)),
-        #    paste("objective =", round(objectiveTmp, 2))
-        #  ))
-        # }
 
         # store every solution if verbose=true
         if (verbose) {
