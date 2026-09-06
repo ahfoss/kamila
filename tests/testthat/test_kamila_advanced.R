@@ -111,6 +111,9 @@ test_that("classifyKamila works and validates inputs", {
   # Invalid obj error
   expect_error(classifyKamila(list(), newData), "valid kamila object")
 
+  # Non-dataframe continuous error
+  expect_error(classifyKamila(kamObj, list("not_df", catFactor[1:5, , drop = FALSE])), "must be a data frame or matrix")
+
   # Non-dataframe categorical error
   expect_error(classifyKamila(kamObj, list(conVar[1:5, ], c("A", "B"))), "must be a data frame")
 

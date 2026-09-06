@@ -127,12 +127,12 @@ gmsClust <- function(
       distFun = catDist,
       memberships = currentClustering$cluster
     )
-    Qcon[i] <- withinConDist / (totalConDist - withinConDist)
-    Qcat[i] <- withinCatDist / (totalCatDist - withinCatDist)
+    Qcon[i] <- if (withinConDist == 0) 0 else withinConDist / (totalConDist - withinConDist)
+    Qcat[i] <- if (withinCatDist == 0) 0 else withinCatDist / (totalCatDist - withinCatDist)
     # If w/in cluster distortion is worse than total distortion,
     # the clustering is "infinitely" bad.
-    if (Qcon[i] < 0) Qcon[i] <- Inf
-    if (Qcat[i] < 0) Qcat[i] <- Inf
+    if (is.na(Qcon[i]) || Qcon[i] < 0) Qcon[i] <- Inf
+    if (is.na(Qcat[i]) || Qcat[i] < 0) Qcat[i] <- Inf
     objFun[i] <- Qcon[i] * Qcat[i]
     if (i == 1 || objFun[i] < bestObj) {
       bestInd <- i
