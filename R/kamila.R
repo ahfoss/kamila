@@ -558,26 +558,27 @@ kamila <- function(
       # Store log likelihood for each initialization
       if (degenerateSoln) {
         totalLogLikVect[init] <- -Inf
-        objectiveVect[init] <- -Inf
       } else {
         totalLogLikVect[init] <- sum(rowMax(allLogLiks))
-        if (hasCat) catLogLikVect[init] <- sum(rowMax(catLogLiks))
-        if (hasCon) {
-          winDistVect[init] <- sum(dist_i[cbind(1:numObs, membNew)])
-          winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
-          if (winToBetRat < 0) winToBetRat <- 100
-        }
-
-        if (hasCon && hasCat) {
-          objectiveVect[init] <- winToBetRat * catLogLikVect[init]
-        } else if (hasCon) {
-          objectiveVect[init] <- totalLogLikVect[init]
-        } else {
-          objectiveVect[init] <- catLogLikVect[init]
-        }
       }
 
       numIterVect[init] <- numIter
+
+      # other useful internal measures of cluster quality
+      if (hasCat) catLogLikVect[init] <- sum(rowMax(catLogLiks))
+      if (hasCon) {
+        winDistVect[init] <- sum(dist_i[cbind(1:numObs, membNew)])
+        winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
+        if (winToBetRat < 0) winToBetRat <- 100
+      }
+
+      if (hasCon && hasCat) {
+        objectiveVect[init] <- winToBetRat * catLogLikVect[init]
+      } else if (hasCon) {
+        objectiveVect[init] <- totalLogLikVect[init]
+      } else {
+        objectiveVect[init] <- if (degenerateSoln) -Inf else catLogLikVect[init]
+      }
 
       # Store current solution if objective beats all others
       if (
