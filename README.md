@@ -1,5 +1,5 @@
 
-# kamila [![Build status](https://ci.appveyor.com/api/projects/status/96ucgsr93ok90aux?svg=true)](https://ci.appveyor.com/project/ahfoss/kamila)  [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/grand-total/kamila)](https://cran.r-project.org/package=kamila) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/kamila)](https://cran.r-project.org/package=kamila)
+# kamila [![R-CMD-check](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml) [![test-coverage](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml) [![Codecov test coverage](https://codecov.io/gh/ahfoss/kamila/branch/master/graph/badge.svg)](https://app.codecov.io/gh/ahfoss/kamila) [![lint](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/grand-total/kamila)](https://cran.r-project.org/package=kamila) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/kamila)](https://cran.r-project.org/package=kamila)
 
 R package for clustering mixed data. For more information, install the package and run
 

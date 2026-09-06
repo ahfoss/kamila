@@ -71,11 +71,11 @@ flexibly model spherical clusters in the continuous domain, and uses a
 multinomial model in the categorical domain.
 
 Weighting scheme: If no weights are desired, set all weights to 1 (the
-default setting). Let a_1, ..., a_p denote the weights for p continuous 
+default setting). Let a_1, ..., a_p denote the weights for p continuous
 variables. Let b_1, ..., b_q denote the weights for q categorical variables.
- Currently, continuous weights are applied during the calculation of 
+ Currently, continuous weights are applied during the calculation of
 Euclidean distance, as:
-Categorical weights are applied to the log-likelihoods obtained by the 
+Categorical weights are applied to the log-likelihoods obtained by the
 level probabilities given cluster membership as:
 Total log likelihood for the kth cluster is obtained by weighting the
 single continuous log-likelihood by the mean of all continuous weights
@@ -85,7 +85,7 @@ completely remove a variable's influence on the clustering; weights equal
 to 1 leave a variable's contribution unchanged. Weights between 0 and 1
 may not be comparable across continuous and categorical variables.
 Estimating the number of clusters: Default is no estimation method. Setting
-calcNumClust to 'ps' uses the prediction strength method of Tibshirani & 
+calcNumClust to 'ps' uses the prediction strength method of Tibshirani &
 Walther (J. of Comp. and Graphical Stats. 14(3), 2005). There is no perfect
 method for estimating the number of clusters; PS tends to give a smaller
 number than, say, BIC based methods for large sample sizes. The user must
@@ -97,9 +97,11 @@ the number of clusters selected.
 # Generate toy data set with poor quality categorical variables and good
 # quality continuous variables.
 set.seed(1)
-dat <- genMixedData(200, nConVar = 2, nCatVar = 2, nCatLevels = 4,
+dat <- genMixedData(200,
+  nConVar = 2, nCatVar = 2, nCatLevels = 4,
   nConWithErr = 2, nCatWithErr = 2, popProportions = c(.5, .5),
-  conErrLev = 0.3, catErrLev = 0.8)
+  conErrLev = 0.3, catErrLev = 0.8
+)
 catDf <- data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE)
 conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE)
 
@@ -108,5 +110,7 @@ kamRes <- kamila(conDf, catDf, numClust = 2, numInit = 10)
 table(kamRes$finalMemb, dat$trueID)
 }
 \references{
-Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and Hadoop. Journal of Statistical Software, 83(13). 2018. doi: 10.18637/jss.v083.i13
+Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and
+  Hadoop. Journal of Statistical Software, 83(13). 2018.
+  doi: 10.18637/jss.v083.i13
 }

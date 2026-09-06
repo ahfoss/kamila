@@ -23,15 +23,20 @@ genMixedData(
 
 \item{nCatVar}{The number of categorical variables.}
 
-\item{nCatLevels}{Integer: The number of categories per categorical variables. Currently must be a multiple of the number of populations specified in popProportions.}
+\item{nCatLevels}{Integer: The number of categories per categorical variables.
+Currently must be a multiple of the number of populations specified in popProportions.}
 
 \item{nConWithErr}{Integer: The number of continuous variables with error.}
 
 \item{nCatWithErr}{Integer: The number of categorical variables with error.}
 
-\item{popProportions}{A vector of scalars that sums to one. The length gives the number of populations (clusters), with values denoting the prior probability of observing a member of the corresponding population. NOTE: currently only two populations are supported.}
+\item{popProportions}{A vector of scalars that sums to one. The length gives
+the number of populations (clusters), with values denoting the prior
+probability of observing a member of the corresponding population. NOTE:
+currently only two populations are supported.}
 
-\item{conErrLev}{A scalar between 0.01 and 1 denoting the univariate overlap between clusters on the continuous variables specified to have error.}
+\item{conErrLev}{A scalar between 0.01 and 1 denoting the univariate overlap
+between clusters on the continuous variables specified to have error.}
 
 \item{catErrLev}{Univariate overlap level for the categorical variables with error.}
 }
@@ -67,8 +72,10 @@ overlap between the K choose 2 pairwise combinations of clusters is a more
 difficult task.
 }
 \examples{
-dat <- genMixedData(100, 2, 2, nCatLevels=4, nConWithErr=1, nCatWithErr=1,
-  popProportions=c(0.3,0.7), conErrLev=0.3, catErrLev=0.2)
-with(dat,plot(conVars,col=trueID))
-with(dat,table(data.frame(catVars[,1:2],trueID, stringsAsFactors = TRUE)))
+dat <- genMixedData(100, 2, 2,
+  nCatLevels = 4, nConWithErr = 1, nCatWithErr = 1,
+  popProportions = c(0.3, 0.7), conErrLev = 0.3, catErrLev = 0.2
+)
+with(dat, plot(conVars, col = trueID))
+with(dat, table(data.frame(catVars[, 1:2], trueID, stringsAsFactors = TRUE)))
 }
