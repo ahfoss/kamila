@@ -70,6 +70,13 @@ categorical variables. It uses a kernel density estimation technique to
 flexibly model spherical clusters in the continuous domain, and uses a
 multinomial model in the categorical domain.
 
+KAMILA is specifically designed for mixed-type data containing both
+continuous and categorical variables. It is not intended for single-type
+data. For continuous-only data, consider using \code{\link[stats]{kmeans}}
+or Gaussian mixture models (e.g., \code{mclust}). For categorical-only data,
+consider Latent Class Analysis (e.g., \code{poLCA}) or \code{kmodes}
+(e.g., \code{klaR}).
+
 Weighting scheme: If no weights are desired, set all weights to 1 (the
 default setting). Let a_1, ..., a_p denote the weights for p continuous
 variables. Let b_1, ..., b_q denote the weights for q categorical variables.

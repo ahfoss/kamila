@@ -22,7 +22,30 @@ test_that("kamila error handling and verbose mode work", {
   expect_error(kamila(conVar, catFactor, numClust = c(2, 3), numInit = 2), "Input parameter numClust must be length 1")
 
   # Non-dataframe input
-  expect_error(kamila(matrix(1:20), catFactor, numClust = 2, numInit = 2), "Input datasets must be dataframes")
+  expect_error(
+    kamila(matrix(1:20), catFactor, numClust = 2, numInit = 2),
+    "Input datasets conVar and catFactor must be dataframes"
+  )
+
+  # 0-column dataframe input (non-mixed data)
+  expect_error(
+    kamila(conVar[, 0, drop = FALSE], catFactor, numClust = 2, numInit = 2),
+    "Input dataset conVar must have at least 1 column"
+  )
+  expect_error(
+    kamila(conVar, catFactor[, 0, drop = FALSE], numClust = 2, numInit = 2),
+    "Input dataset catFactor must have at least 1 column"
+  )
+
+  # Weight length mismatch
+  expect_error(
+    kamila(conVar, catFactor, numClust = 2, numInit = 2, conWeights = 1),
+    "Length of conWeights must equal number of continuous variables"
+  )
+  expect_error(
+    kamila(conVar, catFactor, numClust = 2, numInit = 2, catWeights = c(1, 1)),
+    "Length of catWeights must equal number of categorical variables"
+  )
 
   # Invalid weights
   expect_error(
@@ -107,6 +130,24 @@ test_that("classifyKamila works and validates inputs", {
 
   # Invalid list length error
   expect_error(classifyKamila(kamObj, list(conVar[1:5, ])), "must be list of length 2")
+
+  # Non-dataframe element error
+  expect_error(
+    classifyKamila(kamObj, list(as.matrix(conVar[1:5, ]), catFactor[1:5, , drop = FALSE])),
+    "elements of newData must be data frames"
+  )
+
+  # 0-column dataframe error
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, 0, drop = FALSE], catFactor[1:5, , drop = FALSE])),
+    "must have at least 1 column"
+  )
+
+  # Row mismatch error
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, ], catFactor[1:3, , drop = FALSE])),
+    "number of observations in con and cat vars don't match"
+  )
 })
 
 test_that("myCatKern and sumMatList Rcpp helper function work", {

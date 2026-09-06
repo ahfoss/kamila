@@ -258,6 +258,13 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' flexibly model spherical clusters in the continuous domain, and uses a
 #' multinomial model in the categorical domain.
 #'
+#' KAMILA is specifically designed for mixed-type data containing both
+#' continuous and categorical variables. It is not intended for single-type
+#' data. For continuous-only data, consider using \code{\link[stats]{kmeans}}
+#' or Gaussian mixture models (e.g., \code{mclust}). For categorical-only data,
+#' consider Latent Class Analysis (e.g., \code{poLCA}) or \code{kmodes}
+#' (e.g., \code{klaR}).
+#'
 #' Weighting scheme: If no weights are desired, set all weights to 1 (the
 #' default setting). Let a_1, ..., a_p denote the weights for p continuous
 #' variables. Let b_1, ..., b_q denote the weights for q categorical variables.
@@ -342,6 +349,35 @@ kamila <- function(
   numPredStrCvRun = 10,
   predStrThresh = 0.8
 ) {
+  # (0) extract data characteristics, checks
+  if (!is.data.frame(conVar) || !is.data.frame(catFactor)) {
+    stop("Input datasets conVar and catFactor must be dataframes. KAMILA is designed for mixed-type data.")
+  }
+  if (ncol(conVar) < 1) {
+    stop(paste(
+      "Input dataset conVar must have at least 1 column. KAMILA is designed for mixed-type data;",
+      "for purely categorical data, consider using poLCA or klaR::kmodes."
+    ))
+  }
+  if (ncol(catFactor) < 1) {
+    stop(paste(
+      "Input dataset catFactor must have at least 1 column. KAMILA is designed for mixed-type data;",
+      "for purely continuous data, consider using stats::kmeans or mclust."
+    ))
+  }
+  if (nrow(catFactor) != nrow(conVar)) {
+    stop("Number of observations in con and cat vars don't match")
+  }
+  if (length(conWeights) != ncol(conVar)) {
+    stop("Length of conWeights must equal number of continuous variables")
+  }
+  if (length(catWeights) != ncol(catFactor)) {
+    stop("Length of catWeights must equal number of categorical variables")
+  }
+  if (max(c(conWeights, catWeights)) > 1 || min(c(conWeights, catWeights)) < 0) {
+    stop("Weights must be in [0,1]")
+  }
+
   if (calcNumClust == "none") {
     if (length(numClust) != 1) {
       stop('Input parameter numClust must be length 1 if calcNumClust == "none"')
@@ -351,17 +387,8 @@ kamila <- function(
     # Deprecated option
     returnResampler <- FALSE
 
-    # (0) extract data characteristics, checks
-    if (!is.data.frame(conVar) || !is.data.frame(catFactor)) {
-      stop("Input datasets must be dataframes")
-    }
-    if (max(c(conWeights, catWeights)) > 1 || min(c(conWeights, catWeights)) < 0) stop("Weights must be in [0,1]")
-
     numObs <- nrow(conVar)
     numConVar <- ncol(conVar)
-    if (nrow(catFactor) != numObs) {
-      stop("Number of observations in con and cat vars don't match")
-    }
     numCatVar <- ncol(catFactor)
 
     numLev <- sapply(catFactor, function(xx) length(levels(xx)))
@@ -885,6 +912,16 @@ classifyKamila <- function(obj, newData) {
     stop("Error in function classifyKamila: newData must be list of length 2")
   }
   newCatFactor <- newData[[2]]
+
+  if (!is.data.frame(newCon) || !is.data.frame(newCatFactor)) {
+    stop("Error in function classifyKamila: elements of newData must be data frames")
+  }
+  if (ncol(newCon) < 1 || ncol(newCatFactor) < 1) {
+    stop("Error in function classifyKamila: data frames in newData must have at least 1 column")
+  }
+  if (nrow(newCon) != nrow(newCatFactor)) {
+    stop("Error in function classifyKamila: number of observations in con and cat vars don't match")
+  }
 
   ########################################
   # 1) reconstruct classification rule
