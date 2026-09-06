@@ -63,6 +63,14 @@ test_that("kamila error handling and verbose mode work", {
     kamila(conVar, catFactor, numClust = 2, numInit = 2, conWeights = c(-0.1, 0.5)),
     "Weights must be in \\[0,1\\]"
   )
+  expect_error(
+    kamila(conVar, catFactor, numClust = 2, numInit = 2, catWeights = 1.5),
+    "Weights must be in \\[0,1\\]"
+  )
+  expect_error(
+    kamila(conVar, catFactor, numClust = 2, numInit = 2, catWeights = -0.1),
+    "Weights must be in \\[0,1\\]"
+  )
 
   # Mismatched row counts
   expect_error(kamila(conVar, catFactor[1:10, , drop = FALSE], numClust = 2, numInit = 2), "don't match")
@@ -137,16 +145,36 @@ test_that("classifyKamila works and validates inputs", {
 
   # Invalid list length error
   expect_error(classifyKamila(kamObj, list(conVar[1:5, ])), "must be list of length 2")
+  expect_error(classifyKamila(kamObj, list()), "newData list must have length 1 or 2")
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, ], catFactor[1:5, , drop = FALSE], conVar[1:5, ])),
+    "newData list must have length 1 or 2"
+  )
+
+  # Dataframe passed to mixed model error
+  expect_error(classifyKamila(kamObj, conVar[1:5, ]), "must be list of length 2 for mixed data")
+
+  # Non-dataframe/non-list input error
+  expect_error(classifyKamila(kamObj, "invalid"), "must be a data frame or list of data frames")
+  expect_error(classifyKamila(kamObj, 1:10), "must be a data frame or list of data frames")
 
   # Non-dataframe element error
   expect_error(
     classifyKamila(kamObj, list(as.matrix(conVar[1:5, ]), catFactor[1:5, , drop = FALSE])),
     "elements of newData must be data frames"
   )
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, ], as.matrix(catFactor[1:5, , drop = FALSE]))),
+    "elements of newData must be data frames"
+  )
 
   # 0-column dataframe error
   expect_error(
     classifyKamila(kamObj, list(conVar[1:5, 0, drop = FALSE], catFactor[1:5, , drop = FALSE])),
+    "must have at least 1 column"
+  )
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, ], catFactor[1:5, 0, drop = FALSE])),
     "must have at least 1 column"
   )
 
