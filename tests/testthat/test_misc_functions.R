@@ -66,8 +66,10 @@ test_that("wkmeans works with factor and numeric data and enforces input validat
   expect_error(wkmeans(con, cat_fac, 0.5, 0), "nclust must be a positive integer")
 
   # NA error validations
-  con_na <- con; con_na[1, 1] <- NA
-  cat_fac_na <- cat_fac; cat_fac_na[1, 1] <- NA
+  con_na <- con
+  con_na[1, 1] <- NA
+  cat_fac_na <- cat_fac
+  cat_fac_na[1, 1] <- NA
   expect_error(wkmeans(con_na, cat_fac, 0.5, 2), "conData contains missing values \\(NA\\)")
   expect_error(wkmeans(con, cat_fac_na, 0.5, 2), "catData contains missing values \\(NA\\)")
   expect_error(dummyCodeFactorDf(cat_fac_na), "dat contains missing values \\(NA\\)")

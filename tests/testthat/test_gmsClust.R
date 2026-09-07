@@ -48,4 +48,3 @@ test_that("gmsClust throws clear errors when inputs contain NA values (Issue #3)
     "catData contains missing values \\(NA\\)"
   )
 })
-
