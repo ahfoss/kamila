@@ -36,6 +36,9 @@ dummyCodeFactorDf <- function(dat) {
   if (!all(catTypes == "factor")) {
     stop("Input data frame must have only factor variables.")
   }
+  if (anyNA(dat)) {
+    stop("Input data frame dat contains missing values (NA). Missing values are not supported.")
+  }
   outMat <- Reduce(cbind, lapply(dat, dummyCodeOneVar))
   levNames <- lapply(dat, levels)
   colnames(outMat) <- paste(
@@ -200,6 +203,12 @@ wkmeans <- function(
 ) {
   conData <- as.data.frame(conData)
   catData <- as.data.frame(catData)
+  if (anyNA(conData)) {
+    stop("Input dataset conData contains missing values (NA). Missing values are not supported.")
+  }
+  if (anyNA(catData)) {
+    stop("Input dataset catData contains missing values (NA). Missing values are not supported.")
+  }
   catTypes <- sapply(catData, class)
   if (!all(catTypes == "factor") && !all(catTypes %in% c("integer", "numeric"))) {
     stop("Argument catData must be a data frame with all factor variables or all numeric variables.")

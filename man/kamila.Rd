@@ -112,6 +112,15 @@ accelerated via an Rcpp routine (calcPsCpp) that calculates exact agreement
 proportions via contingency table partitioning in O(N + K^2) time and O(K^2)
 memory, which is mathematically and numerically identical to the pairwise
 formulation without creating an O(N^2) distance matrix.
+
+Prediction strength scores range from 0 to 1, reflecting cluster stability and
+reproducibility across cross-validation folds. Higher scores indicate greater
+cluster reproducibility. Relative differences in prediction strength scores across
+candidate values of \code{numClust} provide insight into cluster structure: a sharp
+drop in prediction strength when transitioning from \emph{k} to \emph{k+1} clusters
+suggests that \emph{k+1} creates unstable or arbitrary partitions. Following Tibshirani
+& Walther (2005), the largest candidate \emph{k} whose score (mean plus standard error)
+meets or exceeds \code{predStrThresh} is selected.
 }
 \examples{
 # Generate toy data set with poor quality categorical variables and good
@@ -125,9 +134,20 @@ dat <- genMixedData(200,
 catDf <- data.frame(apply(dat$catVars, 2, factor), stringsAsFactors = TRUE)
 conDf <- data.frame(scale(dat$conVars), stringsAsFactors = TRUE)
 
+# Standard KAMILA clustering with a specified number of clusters
 kamRes <- kamila(conDf, catDf, numClust = 2, numInit = 10)
-
 table(kamRes$finalMemb, dat$trueID)
+
+\dontrun{
+# KAMILA clustering with prediction strength estimation for number of clusters
+kamPsRes <- kamila(
+  conDf, catDf,
+  numClust = 2:4, numInit = 10,
+  calcNumClust = "ps", numPredStrCvRun = 10, predStrThresh = 0.8
+)
+kamPsRes$nClust$bestNClust
+table(kamPsRes$finalMemb, dat$trueID)
+}
 }
 \references{
 Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and
