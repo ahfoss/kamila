@@ -67,6 +67,36 @@ test_that("genMixedData handles edge cases for error variables", {
     catErrLev = 0.1
   )
   expect_equal(dim(datAll$catVars), c(30, 2))
+
+  # nConVar = 0
+  datNoCon <- genMixedData(
+    sampSize = 30,
+    nConVar = 0,
+    nCatVar = 2,
+    nCatLevels = 4,
+    nConWithErr = 0,
+    nCatWithErr = 1,
+    popProportions = c(0.5, 0.5),
+    conErrLev = 0.1,
+    catErrLev = 0.1
+  )
+  expect_null(datNoCon$conVars)
+  expect_null(datNoCon$trueMus)
+  expect_null(datNoCon$errVariance)
+
+  # nCatWithErr = 0
+  datNoCatErr <- genMixedData(
+    sampSize = 30,
+    nConVar = 2,
+    nCatVar = 2,
+    nCatLevels = 4,
+    nConWithErr = 1,
+    nCatWithErr = 0,
+    popProportions = c(0.5, 0.5),
+    conErrLev = 0.1,
+    catErrLev = 0.1
+  )
+  expect_equal(dim(datNoCatErr$catVars), c(30, 2))
 })
 
 test_that("genMixedData throws errors on invalid input", {
