@@ -5,4 +5,5 @@
 ^AGENTS\.md$
 ^\.lintr$
 ^codecov\.yml$
+^docs$
 
