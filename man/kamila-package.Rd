@@ -41,8 +41,13 @@ gmsResHw <- gmsClust(conVars, catVarsDum, nclust = 3)
 gmsResLloyd <- gmsClust(conVars, catVarsDum, nclust = 3,
   algorithm = "Lloyd", searchDensity = 3)
 
-# KAMILA clustering
+# KAMILA clustering with fixed number of clusters
 kamRes <- kamila(conVars, catVarsFac, numClust=3, numInit=10)
+
+# KAMILA clustering with prediction strength estimation for number of clusters
+kamPsRes <- kamila(conVars, catVarsFac, numClust=2:4, numInit=10,
+  calcNumClust="ps", numPredStrCvRun=10, predStrThresh=0.8)
+kamPsRes$nClust$bestNClust
 
 # Plot results
 ternarySurvival <- factor(Byar$SurvStat)
