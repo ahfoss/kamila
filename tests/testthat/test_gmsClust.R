@@ -19,13 +19,22 @@ test_that("gmsClust handles zero objective function entries and Qcon/Qcat bounds
   conData <- data.frame(x = c(1, 2, 10, 11), y = c(1, 2, 10, 11))
   catData <- data.frame(v1 = c(1, 1, 1, 1), v2 = c(0, 0, 0, 0))
 
-  expect_warning(
+  expect_error(
     gmsClust(conData, catData, nclust = 2, searchDensity = 3),
-    "At least one entry of zero in the objective function"
+    "nclust must be less than the number of unique categorical level combinations"
   )
 
   conData2 <- data.frame(x = c(-100, 100, -100, 100))
   catData2 <- data.frame(v1 = c(1, 0, 1, 0), v2 = c(0, 1, 0, 1))
-  res2 <- suppressWarnings(gmsClust(conData2, catData2, nclust = 2, searchDensity = 10))
-  expect_true(length(res2$results$cluster) == 4)
+
+  expect_error(
+    gmsClust(conData2, catData2, nclust = 2, searchDensity = 10),
+    "nclust must be less than the number of unique categorical level combinations"
+  )
+
+  catData3 <- data.frame(v1 = c(1, 0, 0, 0), v2 = c(0, 1, 0, 1))
+  expect_error(
+    gmsClust(conData2, catData3, nclust = 2, searchDensity = 10),
+    "At least one entry of zero in the objective function"
+  )
 })

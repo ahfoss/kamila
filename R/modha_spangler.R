@@ -73,6 +73,10 @@ gmsClust <- function(
   conData <- as.data.frame(conData)
   catData <- as.data.frame(catData)
 
+  if (nclust >= nrow(unique(catData))) {
+    stop("nclust must be less than the number of unique categorical level combinations.")
+  }
+
   # initializations
   bestObj <- Inf
   weights <- seq(
@@ -142,9 +146,10 @@ gmsClust <- function(
     }
   }
   if (any(objFun == 0)) {
-    warning("At least one entry of zero in the objective function;
-    is nclust >= the number of categorical variable
-    level combinations?")
+    stop(
+      "At least one entry of zero in the objective function; ",
+      "nclust must be less than the number of categorical variable level combinations."
+    )
   }
   return(list(
     results = bestRes,
