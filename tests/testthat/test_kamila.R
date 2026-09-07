@@ -151,4 +151,3 @@ test_that("KAMILA throws clear errors when inputs contain NA values (Issue #3)",
     "catFactor contains missing values \\(NA\\)"
   )
 })
-
