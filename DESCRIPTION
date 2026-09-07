@@ -44,6 +44,8 @@ Suggests:
     ggplot2,
     Hmisc,
     covr,
-    xml2
+    xml2,
+    shiny,
+    cluster
 Config/roxygen2/version: 8.1.0
 Config/testthat/edition: 3
