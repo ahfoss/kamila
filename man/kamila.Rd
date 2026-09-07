@@ -107,7 +107,11 @@ method for estimating the number of clusters; PS tends to give a smaller
 number than, say, BIC based methods for large sample sizes. The user must
 specify the number of cross-validation runs and the threshold for
 determining the number of clusters. The smaller the threshold, the larger
-the number of clusters selected.
+the number of clusters selected. Cluster pair co-membership evaluation is
+accelerated via an Rcpp routine (calcPsCpp) that calculates exact agreement
+proportions via contingency table partitioning in O(N + K^2) time and O(K^2)
+memory, which is mathematically and numerically identical to the pairwise
+formulation without creating an O(N^2) distance matrix.
 
 Prediction strength scores range from 0 to 1, reflecting cluster stability and
 reproducibility across cross-validation folds. Higher scores indicate greater
