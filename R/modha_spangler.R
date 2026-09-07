@@ -72,6 +72,16 @@ gmsClust <- function(
   # variable tests
   conData <- as.data.frame(conData)
   catData <- as.data.frame(catData)
+  if (anyNA(conData)) {
+    stop("Input dataset conData contains missing values (NA). Missing values are not supported.")
+  }
+  if (anyNA(catData)) {
+    stop("Input dataset catData contains missing values (NA). Missing values are not supported.")
+  }
+
+  if (nclust >= nrow(unique(catData))) {
+    stop("nclust must be less than the number of unique categorical level combinations.")
+  }
 
   # initializations
   bestObj <- Inf
@@ -142,9 +152,10 @@ gmsClust <- function(
     }
   }
   if (any(objFun == 0)) {
-    warning("At least one entry of zero in the objective function;
-    is nclust >= the number of categorical variable
-    level combinations?")
+    stop(
+      "At least one entry of zero in the objective function; ",
+      "nclust must be less than the number of categorical variable level combinations."
+    )
   }
   return(list(
     results = bestRes,
