@@ -372,6 +372,9 @@ kamila <- function(
     if (ncol(conVar) < 1) {
       stop("Input dataset conVar must have at least 1 column.")
     }
+    if (anyNA(conVar)) {
+      stop("Input dataset conVar contains missing values (NA). Missing values are not supported.")
+    }
     numConVar <- ncol(conVar)
     if (is.null(conWeights)) {
       conWeights <- rep(1, numConVar)
@@ -393,6 +396,9 @@ kamila <- function(
     }
     if (ncol(catFactor) < 1) {
       stop("Input dataset catFactor must have at least 1 column.")
+    }
+    if (anyNA(catFactor)) {
+      stop("Input dataset catFactor contains missing values (NA). Missing values are not supported.")
     }
     numCatVar <- ncol(catFactor)
     if (is.null(catWeights)) {
