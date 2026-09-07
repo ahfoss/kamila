@@ -111,3 +111,16 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// calcPsCpp
+NumericVector calcPsCpp(IntegerVector testMemb, IntegerVector teIntoTr, int numClust);
+RcppExport SEXP _kamila_calcPsCpp(SEXP testMembSEXP, SEXP teIntoTrSEXP, SEXP numClustSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerVector >::type testMemb(testMembSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type teIntoTr(teIntoTrSEXP);
+    Rcpp::traits::input_parameter< int >::type numClust(numClustSEXP);
+    rcpp_result_gen = Rcpp::wrap(calcPsCpp(testMemb, teIntoTr, numClust));
+    return rcpp_result_gen;
+END_RCPP
+}

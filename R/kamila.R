@@ -296,7 +296,11 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' number than, say, BIC based methods for large sample sizes. The user must
 #' specify the number of cross-validation runs and the threshold for
 #' determining the number of clusters. The smaller the threshold, the larger
-#' the number of clusters selected.
+#' the number of clusters selected. Cluster pair co-membership evaluation is
+#' accelerated via an Rcpp routine (calcPsCpp) that calculates exact agreement
+#' proportions via contingency table partitioning in O(N + K^2) time and O(K^2)
+#' memory, which is mathematically and numerically identical to the pairwise
+#' formulation without creating an O(N^2) distance matrix.
 #' @export
 #' @importFrom stats runif sd setNames
 #' @param conVar An optional data frame of continuous variables. At least one of
@@ -747,12 +751,6 @@ kamila <- function(
           verbose = FALSE
         )
 
-        testIndList <- mapply(
-          x = 1:numClust[ithNcInd],
-          function(x) which(testClust$finalMemb == x),
-          SIMPLIFY = FALSE
-        )
-
         # Allocate test data based on training clusters.
         testDataClassify <- if (hasCon && hasCat) {
           list(testCon, testCat)
@@ -767,43 +765,15 @@ kamila <- function(
           testDataClassify
         )
 
-        # Initialize D matrix.
-        dMat <- matrix(
-          NaN,
-          nrow = numInTest,
-          ncol = numInTest
+        # Calculate prediction strength proportions using Rcpp function.
+        # Uses exact combinatorial identity via contingency table counts C_{k,m}:
+        # psProps[k] = sum_m [C_{k,m} * (C_{k,m} - 1)] / [n_k * (n_k - 1)],
+        # evaluating pair co-membership in O(N + K^2) time instead of O(N^2) loops.
+        psProps <- calcPsCpp(
+          testClust$finalMemb,
+          teIntoTr,
+          numClust[ithNcInd]
         )
-
-        # Calculate D matrix.
-        # replace with RCpp
-        for (i in 1:(numInTest - 1)) {
-          for (j in (i + 1):numInTest) {
-            dMat[i, j] <- teIntoTr[i] == teIntoTr[j]
-          }
-        }
-
-        # Initialize proportions to zero.
-        psProps <- rep(0, numClust[ithNcInd])
-
-        # Calculate prediction strength proportions.
-        # replace with RCpp
-        for (cl in 1:numClust[ithNcInd]) {
-          clustN <- length(testIndList[[cl]])
-          if (clustN > 1) {
-            for (i in 1:(clustN - 1)) {
-              for (j in (i + 1):clustN) {
-                psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
-              }
-            }
-          }
-          if (clustN < 2) {
-            # if cluster size is 1 or zero, not applicable
-            psProps[cl] <- NA
-          } else {
-            # * 2 since only upper triangle of dMat is used.
-            psProps[cl] <- psProps[cl] / (clustN * (clustN - 1)) * 2
-          }
-        }
 
         # Calculate and update prediction strength results.
         psCvRes[ithNcInd, cvRun] <- ifelse(
