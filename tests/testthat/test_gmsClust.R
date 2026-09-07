@@ -29,3 +29,23 @@ test_that("gmsClust handles zero objective function entries and Qcon/Qcat bounds
   res2 <- suppressWarnings(gmsClust(conData2, catData2, nclust = 2, searchDensity = 10))
   expect_true(length(res2$results$cluster) == 4)
 })
+
+test_that("gmsClust throws clear errors when inputs contain NA values (Issue #3)", {
+  conData <- data.frame(x = rnorm(10), y = rnorm(10))
+  catData <- data.frame(v1 = c(1, 0, 1, 0, 1, 0, 1, 0, 1, 0))
+
+  conData_na <- conData
+  conData_na[1, 1] <- NA
+  expect_error(
+    gmsClust(conData = conData_na, catData = catData, nclust = 2),
+    "conData contains missing values \\(NA\\)"
+  )
+
+  catData_na <- catData
+  catData_na[1, 1] <- NA
+  expect_error(
+    gmsClust(conData = conData, catData = catData_na, nclust = 2),
+    "catData contains missing values \\(NA\\)"
+  )
+})
+

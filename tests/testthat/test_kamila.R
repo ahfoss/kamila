@@ -77,3 +77,23 @@ test_that("KAMILA prediction strength works with single-variable catFactor data 
   expect_true(is.list(res))
   expect_true(res$nClust$bestNClust %in% 2:3)
 })
+
+test_that("KAMILA throws clear errors when inputs contain NA values (Issue #3)", {
+  conDf <- data.frame(x = rnorm(10), y = rnorm(10))
+  catDf <- data.frame(f = factor(rep(c("A", "B"), 5)))
+
+  conDf_na <- conDf
+  conDf_na[1, 1] <- NA
+  expect_error(
+    kamila(conVar = conDf_na, catFactor = catDf, numClust = 2, numInit = 2),
+    "conVar contains missing values \\(NA\\)"
+  )
+
+  catDf_na <- catDf
+  catDf_na[1, 1] <- NA
+  expect_error(
+    kamila(conVar = conDf, catFactor = catDf_na, numClust = 2, numInit = 2),
+    "catFactor contains missing values \\(NA\\)"
+  )
+})
+

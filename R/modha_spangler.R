@@ -72,6 +72,12 @@ gmsClust <- function(
   # variable tests
   conData <- as.data.frame(conData)
   catData <- as.data.frame(catData)
+  if (anyNA(conData)) {
+    stop("Input dataset conData contains missing values (NA). Missing values are not supported.")
+  }
+  if (anyNA(catData)) {
+    stop("Input dataset catData contains missing values (NA). Missing values are not supported.")
+  }
 
   # initializations
   bestObj <- Inf
