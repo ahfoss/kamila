@@ -143,6 +143,19 @@ test_that("classifyKamila works and validates inputs", {
   expect_equal(length(pred), 5)
   expect_true(all(pred %in% c(1, 2)))
 
+  # Invalid obj error
+  expect_error(classifyKamila(list(), newData), "valid kamila object")
+  expect_error(classifyKamila("not_a_list", newData), "valid kamila object")
+  expect_error(classifyKamila(list(input = list()), newData), "valid kamila object")
+  expect_error(
+    classifyKamila(list(input = list(conVar = conVar), finalCenters = NULL), newData),
+    "valid kamila object"
+  )
+  expect_error(
+    classifyKamila(list(input = list(catFactor = catFactor), finalProbs = NULL), newData),
+    "valid kamila object"
+  )
+
   # Invalid list length error
   expect_error(classifyKamila(kamObj, list(conVar[1:5, ])), "must be list of length 2")
   expect_error(classifyKamila(kamObj, list()), "newData list must have length 1 or 2")
@@ -158,9 +171,15 @@ test_that("classifyKamila works and validates inputs", {
   expect_error(classifyKamila(kamObj, "invalid"), "must be a data frame or list of data frames")
   expect_error(classifyKamila(kamObj, 1:10), "must be a data frame or list of data frames")
 
-  # Non-dataframe element error
+  # Non-dataframe continuous error
   expect_error(
-    classifyKamila(kamObj, list(as.matrix(conVar[1:5, ]), catFactor[1:5, , drop = FALSE])),
+    classifyKamila(kamObj, list("not_df", catFactor[1:5, , drop = FALSE])),
+    "must be a data frame or matrix"
+  )
+
+  # Non-dataframe categorical error
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, ], c("A", "B"))),
     "elements of newData must be data frames"
   )
   expect_error(
@@ -183,6 +202,42 @@ test_that("classifyKamila works and validates inputs", {
     classifyKamila(kamObj, list(conVar[1:5, ], catFactor[1:3, , drop = FALSE])),
     "number of observations in con and cat vars don't match"
   )
+
+  # Mismatched continuous column count error
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:5, 1, drop = FALSE], catFactor[1:5, , drop = FALSE])),
+    "number of continuous columns in newData does not match model"
+  )
+
+  # Mismatched categorical column count error
+  expect_error(
+    classifyKamila(
+      kamObj,
+      list(conVar[1:5, ], data.frame(f1 = catFactor$f1[1:5], f2 = catFactor$f1[1:5]))
+    ),
+    "number of categorical columns in newData does not match model"
+  )
+
+  # Issue 16: Unseen categorical level error
+  badCat <- data.frame(f1 = factor(c("A", "C", "B")), stringsAsFactors = TRUE)
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:3, ], badCat)),
+    "Categorical variable 'f1' \\(column 1\\) contains level\\(s\\) not present in training data: 'C'"
+  )
+
+  # Unseen level error without column names
+  badCatNoName <- data.frame(factor(c("A", "D")), stringsAsFactors = TRUE)
+  colnames(badCatNoName) <- ""
+  expect_error(
+    classifyKamila(kamObj, list(conVar[1:2, ], badCatNoName)),
+    "Categorical variable column 1 contains level\\(s\\) not present in training data: 'D'"
+  )
+
+  # Test data with a subset of levels or reordered levels is correctly handled
+  subsetCat <- data.frame(f1 = factor(c("B", "B"), levels = c("B")), stringsAsFactors = TRUE)
+  predSubset <- classifyKamila(kamObj, list(conVar[1:2, ], subsetCat))
+  expect_equal(length(predSubset), 2)
+  expect_true(all(predSubset %in% c(1, 2)))
 })
 
 test_that("myCatKern and sumMatList Rcpp helper function work", {

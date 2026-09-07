@@ -919,8 +919,17 @@ cyclicalCoding <- function(invar) {
 #'   Hadoop. Journal of Statistical Software, 83(13). 2018.
 #'   doi: 10.18637/jss.v083.i13
 classifyKamila <- function(obj, newData) {
-  hasCon <- !is.null(obj$input$conVar) && ncol(obj$input$conVar) > 0
-  hasCat <- !is.null(obj$input$catFactor) && ncol(obj$input$catFactor) > 0
+  hasCon <- is.list(obj) && !is.null(obj$input$conVar) && ncol(obj$input$conVar) > 0
+  hasCat <- is.list(obj) && !is.null(obj$input$catFactor) && ncol(obj$input$catFactor) > 0
+
+  if (
+    !is.list(obj) || is.null(obj$input) ||
+      (!hasCon && !hasCat) ||
+      (hasCon && is.null(obj$finalCenters)) ||
+      (hasCat && is.null(obj$finalProbs))
+  ) {
+    stop("Error in function classifyKamila: obj must be a valid kamila object")
+  }
 
   if (is.list(newData) && !is.data.frame(newData)) {
     if (length(newData) == 2) {
@@ -939,7 +948,7 @@ classifyKamila <- function(obj, newData) {
     } else {
       stop("Error in function classifyKamila: newData list must have length 1 or 2")
     }
-  } else if (is.data.frame(newData)) {
+  } else if (is.data.frame(newData) || (hasCon && !hasCat && is.matrix(newData))) {
     if (hasCon && !hasCat) {
       newCon <- newData
       newCatFactor <- NULL
@@ -954,9 +963,10 @@ classifyKamila <- function(obj, newData) {
   }
 
   if (hasCon) {
-    if (!is.data.frame(newCon)) {
-      stop("Error in function classifyKamila: elements of newData must be data frames")
+    if (!is.data.frame(newCon) && !is.matrix(newCon)) {
+      stop("Error in function classifyKamila: newData continuous element must be a data frame or matrix")
     }
+    newCon <- as.data.frame(newCon)
     if (ncol(newCon) < 1) {
       stop("Error in function classifyKamila: data frames in newData must have at least 1 column")
     }
@@ -980,6 +990,33 @@ classifyKamila <- function(obj, newData) {
         "Error in function classifyKamila: number of categorical columns in newData",
         "does not match model"
       ))
+    }
+
+    numCatVar <- ncol(newCatFactor)
+    for (ind in seq_len(numCatVar)) {
+      trLevels <- levels(obj$input$catFactor[[ind]])
+      colName <- colnames(newCatFactor)[ind]
+      varDesc <- if (!is.null(colName) && nchar(colName) > 0) {
+        paste0("'", colName, "' (column ", ind, ")")
+      } else {
+        paste0("column ", ind)
+      }
+
+      valChar <- as.character(newCatFactor[[ind]])
+      uniqVals <- unique(valChar[!is.na(valChar)])
+      unseenLevels <- setdiff(uniqVals, trLevels)
+
+      if (length(unseenLevels) > 0) {
+        formattedLevels <- paste(paste0("'", unseenLevels, "'"), collapse = ", ")
+        stop(
+          "Error in function classifyKamila: Categorical variable ",
+          varDesc,
+          " contains level(s) not present in training data: ",
+          formattedLevels
+        )
+      }
+
+      newCatFactor[[ind]] <- factor(newCatFactor[[ind]], levels = trLevels)
     }
   }
 
