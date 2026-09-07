@@ -198,7 +198,9 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
   newY[coordsLtQ05] <- radKDE$x[coordsLtQ05] * (newY[maxPt] / radKDE$x[maxPt]) # y = x * sl
 
   # radial Jacobian transformation; up to proportionality constant
-  radY <- c(0, newY[-1] / radKDE$x[-1]^(pdim - 1))
+  # Issue #9 fix: avoid zero density at r = 0 by right-continuous extension
+  radY_rest <- newY[-1] / radKDE$x[-1]^(pdim - 1)
+  radY <- c(radY_rest[1], radY_rest)
 
   # replace densities over MAXDENS with MAXDENS
   overMax <- radY > MAXDENS
@@ -215,6 +217,7 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
   # now create resampling function
   resampler <- approxfun(x = radKDE$x, y = densR, rule = 1:2, method = "linear")
   kdes <- resampler(evalPoints)
+  kdes <- pmax(kdes, min(densR))
   if (!returnFun) {
     resampler <- NULL
   }
