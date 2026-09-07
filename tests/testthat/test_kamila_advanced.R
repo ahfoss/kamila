@@ -101,7 +101,13 @@ test_that("kamila with prediction strength (calcNumClust == 'ps') works and vali
   expect_error(kamila(conVar, catFactor, numClust = c(2, 30), numInit = 2, calcNumClust = "ps"), "cannot exceed")
 
   # Scalar numClust warning
-  expect_warning(kamila(conVar, catFactor, numClust = 2, numInit = 2, calcNumClust = "ps"), "numClust is a scalar")
+  expect_warning(
+    expect_warning(
+      kamila(conVar, catFactor, numClust = 2, numInit = 2, calcNumClust = "ps"),
+      "No cluster size is above prediction strength threshold"
+    ),
+    "numClust is a scalar"
+  )
 
   # Invalid predStrThresh
   expect_error(
@@ -127,7 +133,7 @@ test_that("kamila with prediction strength (calcNumClust == 'ps') works and vali
   # Successful PS run
   ps_res <- kamila(
     conVar, catFactor, numClust = c(2, 3), numInit = 2, calcNumClust = "ps",
-    numPredStrCvRun = 2, predStrThresh = 0.5
+    numPredStrCvRun = 2, predStrThresh = 0.1
   )
   expect_true(ps_res$nClust$bestNClust %in% c(2, 3))
 })
