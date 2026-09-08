@@ -12,3 +12,16 @@ from the R terminal. For an in-depth discussion of the challenges involved in cl
  * [Foss, Markatou, and Ray (2018). Distance Metrics and Clustering Methods for Mixed-Type Data. **International Statistical Review**. DOI: 10.1111/insr.12274.](https://onlinelibrary.wiley.com/doi/abs/10.1111/insr.12274)
 
 Update May 11, 2020: Update data.frame calls to be compatible with R v4.x.x
+
+## Interactive Clustering Horse-Race App
+
+You can launch the interactive mixed-type clustering horse-race application directly from R:
+
+```r
+shiny::runGitHub(
+  repo = "kamila",
+  username = "ahfoss",
+  ref = "export_ci_pipeline_results",
+  subdir = "inst/shiny/horserace"
+)
+```

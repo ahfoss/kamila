@@ -181,7 +181,7 @@ ui <- fluidPage(
     tags$div(
       tags$h2("Mixed-Type Clustering Horse-Race", style = "margin-bottom: 2px; font-weight: 700;"),
       tags$p(
-        "Interactive client-side benchmark comparing KAMILA against mixed-data clustering techniques.",
+        "Interactive benchmark comparing mixed-data clustering techniques.",
         style = "color: #6c757d; font-size: 1.05rem;"
       )
     ),
@@ -202,12 +202,12 @@ ui <- fluidPage(
         step = 250
       ),
       fluidRow(
-        column(6, sliderInput("p_con", "Continuous (P1):", min = 2, max = 15, value = 5, step = 1)),
-        column(6, sliderInput("p_cat", "Categorical (P2):", min = 2, max = 15, value = 5, step = 1))
+        column(6, sliderInput("p_con", "Num. Continuous Vars.", min = 2, max = 15, value = 5, step = 1)),
+        column(6, sliderInput("p_cat", "Num. Categorial Vars.", min = 2, max = 15, value = 5, step = 1))
       ),
       fluidRow(
-        column(6, sliderInput("k_clusters", "True Clusters (K):", min = 2, max = 5, value = 3, step = 1)),
-        column(6, sliderInput("separation", "Separation:", min = 0.5, max = 4.0, value = 2.0, step = 0.5))
+        column(6, sliderInput("k_clusters", "Num. True Clusters:", min = 2, max = 5, value = 3, step = 1)),
+        column(6, sliderInput("separation", "Avg. Cluster Separation", min = 0.5, max = 4.0, value = 2.0, step = 0.5))
       ),
       numericInput("rand_seed", "Random Seed:", value = 42, min = 1),
 
@@ -254,14 +254,13 @@ ui <- fluidPage(
           tags$br(),
           tags$div(
             class = "alert alert-info",
-            tags$strong("Fixed-K Evaluation: "),
-            "Evaluates accuracy (Adjusted Rand Index), misclassification error, and runtime for specified K."
+            "Evaluate ARI (Adjusted Rand Index), misclassification error, and runtime for a fixed number of clusters."
           ),
           tags$h4("Performance Summary", style = "font-weight: 600; margin-top: 15px;"),
           tableOutput("benchmark_table"),
           tags$hr(),
           tags$h4("Visual Performance Comparison", style = "font-weight: 600;"),
-          plotOutput("benchmark_plot", height = "320px")
+          plotOutput("benchmark_plot", height = "380px")
         ),
 
         tabPanel(
@@ -276,7 +275,7 @@ ui <- fluidPage(
           tableOutput("selection_table"),
           tags$hr(),
           tags$h4("Selected K Comparison Plot", style = "font-weight: 600;"),
-          plotOutput("selection_plot", height = "300px")
+          plotOutput("selection_plot", height = "360px")
         ),
 
         tabPanel(
@@ -849,7 +848,7 @@ server <- function(input, output, session) {
     valid_res <- res[!is.na(res$ARI), ]
     if (nrow(valid_res) == 0) return(NULL)
 
-    par(mfrow = c(1, 2), mar = c(5, 5, 3, 1))
+    par(mfrow = c(1, 2), mar = c(7.5, 4.5, 3, 1))
 
     # ARI Plot
     barplot(
@@ -859,7 +858,8 @@ server <- function(input, output, session) {
       main = "Adjusted Rand Index (Higher = Better)",
       ylab = "ARI Score",
       ylim = c(0, 1),
-      las = 2
+      las = 2,
+      cex.names = 0.95
     )
     abline(h = seq(0, 1, 0.2), col = "gray80", lty = 2)
 
@@ -870,7 +870,8 @@ server <- function(input, output, session) {
       col = "#18bc9c",
       main = "Execution Time (Lower = Faster)",
       ylab = "Time (ms)",
-      las = 2
+      las = 2,
+      cex.names = 0.95
     )
     abline(h = axTicks(2), col = "gray80", lty = 2)
   })
@@ -885,7 +886,7 @@ server <- function(input, output, session) {
     valid_res <- res[!is.na(res$Predicted_K), ]
     if (nrow(valid_res) == 0) return(NULL)
 
-    par(mar = c(5, 5, 3, 1))
+    par(mar = c(7.5, 4.5, 3, 1))
     barplot(
       valid_res$Predicted_K,
       names.arg = valid_res$Method,
@@ -893,7 +894,8 @@ server <- function(input, output, session) {
       main = "Predicted Number of Clusters (True K indicated by dashed line)",
       ylab = "Predicted K",
       ylim = c(0, 6),
-      las = 2
+      las = 2,
+      cex.names = 0.95
     )
     abline(h = isolate(input$k_clusters), col = "red", lty = 2, lwd = 2)
     legend("topright", legend = paste("True K =", isolate(input$k_clusters)), col = "red", lty = 2, lwd = 2)
