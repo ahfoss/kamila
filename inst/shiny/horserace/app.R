@@ -7,6 +7,13 @@ if (requireNamespace("shiny", quietly = TRUE)) {
   library(shiny)
 }
 
+# If running inside WebR / WebAssembly browser environment, automatically install packages
+if (exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1") {
+  tryCatch({
+    webr::install(c("clustMixType", "clustrd", "VarSelLCM", "flexmix", "mclust", "MASS"))
+  }, error = function(e) NULL)
+}
+
 # Optional dependencies loaded conditionally for WebR compatibility
 has_pkg <- function(pkg) requireNamespace(pkg, quietly = TRUE)
 
@@ -123,6 +130,38 @@ generate_synthetic_mixed_data <- function(n = 1000, p_con = 5, p_cat = 5, k = 3,
 ui <- fluidPage(
   theme = if (has_pkg("bslib")) bslib::bs_theme(version = 5, bootswatch = "flatly") else NULL,
 
+  tags$head(
+    tags$style(HTML("
+      .shiny-notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 340px;
+        border-radius: 8px !important;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.2) !important;
+        border-left: 6px solid #18bc9c !important;
+        font-weight: 500 !important;
+        z-index: 9999;
+      }
+      .horse-status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin: 2px;
+      }
+      .horse-running {
+        animation: horsePulse 1.1s infinite ease-in-out;
+      }
+      @keyframes horsePulse {
+        0% { transform: scale(1); opacity: 0.85; }
+        50% { transform: scale(1.05); opacity: 1; }
+        100% { transform: scale(1); opacity: 0.85; }
+      }
+    "))
+  ),
+
   titlePanel(
     tags$div(
       tags$h2("Mixed-Type Clustering Horse-Race", style = "margin-bottom: 2px; font-weight: 700;"),
@@ -170,7 +209,7 @@ ui <- fluidPage(
           "VarSelLCM (VarSelLCM)" = "varsellcm",
           "FlexMix / Latent Class (flexmix)" = "flexmix"
         ),
-        selected = c("kamila", "gower_pam", "kproto")
+        selected = c("kamila", "gower_pam", "kproto", "cluspcamix", "varsellcm", "flexmix")
       ),
 
       actionButton(
@@ -184,7 +223,10 @@ ui <- fluidPage(
         "Run Cluster Selection (K in 2:5)",
         class = "btn-outline-primary btn-md w-100",
         style = "margin-top: 8px; font-weight: 600;"
-      )
+      ),
+
+      tags$hr(),
+      uiOutput("live_status_ui")
     ),
 
     mainPanel(
@@ -223,10 +265,49 @@ ui <- fluidPage(
         ),
 
         tabPanel(
-          "Data & Cluster Projection",
+          "LDA Cluster Projection",
           tags$br(),
-          tags$p("2D Principal Component Projection comparing true ground-truth labels vs. KAMILA assignments."),
-          plotOutput("pca_cluster_plot", height = "420px")
+          tags$div(
+            class = "alert alert-secondary",
+            tags$strong("Linear Discriminant Analysis (LDA) Projection: "),
+            "Displays the multi-dimensional mixed data projected onto the optimal discriminant subspace ",
+            "defined by the true ground-truth clusters. Compare partitioning across all techniques."
+          ),
+          fluidRow(
+            column(
+              6,
+              selectInput(
+                "proj_view",
+                "Projection Layout:",
+                choices = c(
+                  "Multi-Method Comparison Grid" = "grid",
+                  "Single Method Focus" = "single"
+                ),
+                selected = "grid"
+              )
+            ),
+            column(
+              6,
+              conditionalPanel(
+                condition = "input.proj_view == 'single'",
+                selectInput(
+                  "proj_single_method",
+                  "Select Technique to Display:",
+                  choices = c(
+                    "True Ground Truth" = "true",
+                    "KAMILA (kamila)" = "kamila",
+                    "Gower + PAM (cluster)" = "gower_pam",
+                    "K-Prototypes (clustMixType)" = "kproto",
+                    "ClusPCAMix (clustrd)" = "cluspcamix",
+                    "VarSelLCM (VarSelLCM)" = "varsellcm",
+                    "FlexMix (flexmix)" = "flexmix"
+                  ),
+                  selected = "kamila"
+                )
+              )
+            )
+          ),
+          plotOutput("lda_cluster_plot", height = "600px")
         ),
 
         tabPanel(
@@ -234,7 +315,7 @@ ui <- fluidPage(
           tags$br(),
           tags$h4("Runtime Environment & Specs", style = "font-weight: 600;"),
           tableOutput("env_info_table"),
-          tags$h4("Package Versions", style = "font-weight: 600; margin-top: 20px;"),
+          tags$h4("Package Versions & Availability", style = "font-weight: 600; margin-top: 20px;"),
           tableOutput("pkg_version_table")
         )
       )
@@ -246,6 +327,9 @@ ui <- fluidPage(
 # Server Logic
 # ------------------------------------------------------------------------------
 server <- function(input, output, session) {
+
+  # Reactive execution progress state
+  status_tracker <- reactiveVal(list())
 
   # Dataset Generator
   sim_data <- reactive({
@@ -263,6 +347,36 @@ server <- function(input, output, session) {
     })
   })
 
+  # Live progress badge panel
+  output$live_status_ui <- renderUI({
+    st <- status_tracker()
+    if (length(st) == 0) return(NULL)
+
+    tagList(
+      tags$div(
+        style = "padding: 8px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6;",
+        tags$h6("Execution Tracker", style = "font-weight: 700; margin-bottom: 6px;"),
+        lapply(names(st), function(m) {
+          info <- st[[m]]
+          status_class <- if (info$state == "running") {
+            "badge bg-warning text-dark horse-running"
+          } else if (info$state == "done") {
+            "badge bg-success"
+          } else if (info$state == "error") {
+            "badge bg-danger"
+          } else {
+            "badge bg-secondary"
+          }
+          tags$div(
+            style = "margin-bottom: 4px; font-size: 0.85rem;",
+            tags$span(class = status_class, info$label),
+            tags$span(style = "margin-left: 6px; color: #495057;", info$detail)
+          )
+        })
+      )
+    )
+  })
+
   # ----------------------------------------------------------------------------
   # Fixed-K Benchmark
   # ----------------------------------------------------------------------------
@@ -272,200 +386,118 @@ server <- function(input, output, session) {
     k <- isolate(input$k_clusters)
     results <- list()
 
-    # 1. KAMILA
-    if ("kamila" %in% selected_methods) {
-      if (has_pkg("kamila")) {
-        t_start <- proc.time()
-        res <- tryCatch({
-          kamila::kamila(
-            dat$conVars,
-            dat$catVars,
-            numClust = k,
-            numInit = 5,
-            maxIter = 25,
-            calcNumClust = "none"
-          )
-        }, error = function(e) NULL)
-        t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+    method_meta <- list(
+      kamila = list(name = "KAMILA", pkg = "kamila"),
+      gower_pam = list(name = "Gower + PAM", pkg = "cluster"),
+      kproto = list(name = "K-Prototypes", pkg = "clustMixType"),
+      cluspcamix = list(name = "ClusPCAMix", pkg = "clustrd"),
+      varsellcm = list(name = "VarSelLCM", pkg = "VarSelLCM"),
+      flexmix = list(name = "FlexMix", pkg = "flexmix")
+    )
 
-        if (!is.null(res)) {
-          ari <- calc_ari(dat$trueID, res$finalMemb)
-          err <- calc_misclass_error(dat$trueID, res$finalMemb)
-          results[[length(results) + 1]] <- data.frame(
-            Method = "KAMILA",
-            Package = "kamila",
-            Time_ms = round(t_elapsed, 1),
-            ARI = round(ari, 4),
-            Error_Rate = round(err, 4),
-            Status = "Success",
-            stringsAsFactors = FALSE
-          )
-        }
-      } else {
-        results[[length(results) + 1]] <- data.frame(
-          Method = "KAMILA", Package = "kamila", Time_ms = NA, ARI = NA, Error_Rate = NA,
-          Status = "Not Available", stringsAsFactors = FALSE
-        )
-      }
+    valid_methods <- intersect(names(method_meta), selected_methods)
+    n_total <- max(1, length(valid_methods))
+
+    # Initialize progress tracker
+    init_st <- list()
+    for (m in valid_methods) {
+      init_st[[m]] <- list(state = "queued", label = method_meta[[m]]$name, detail = "Queued...")
     }
+    status_tracker(init_st)
 
-    # 2. Gower + PAM
-    if ("gower_pam" %in% selected_methods) {
-      if (has_pkg("cluster")) {
-        t_start <- proc.time()
-        res <- tryCatch({
-          gower_dist <- cluster::daisy(dat$fullData, metric = "gower")
-          cluster::pam(gower_dist, k = k, diss = TRUE)
-        }, error = function(e) NULL)
-        t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+    withProgress(
+      message = "Running Fixed-K Horse-Race",
+      detail = "Initializing...",
+      value = 0,
+      {
+        idx <- 0
+        for (m in valid_methods) {
+          idx <- idx + 1
+          m_info <- method_meta[[m]]
+          m_name <- m_info$name
+          m_pkg <- m_info$pkg
 
-        if (!is.null(res)) {
-          ari <- calc_ari(dat$trueID, res$clustering)
-          err <- calc_misclass_error(dat$trueID, res$clustering)
-          results[[length(results) + 1]] <- data.frame(
-            Method = "Gower + PAM",
-            Package = "cluster",
-            Time_ms = round(t_elapsed, 1),
-            ARI = round(ari, 4),
-            Error_Rate = round(err, 4),
-            Status = "Success",
-            stringsAsFactors = FALSE
+          incProgress(
+            1 / n_total,
+            detail = sprintf("[%d/%d] Running %s (%s)...", idx, n_total, m_name, m_pkg)
           )
+
+          cur_st <- status_tracker()
+          cur_st[[m]] <- list(state = "running", label = m_name, detail = "Computing...")
+          status_tracker(cur_st)
+
+          if (!has_pkg(m_pkg)) {
+            results[[length(results) + 1]] <- data.frame(
+              Method = m_name, Package = m_pkg, Time_ms = NA, ARI = NA, Error_Rate = NA,
+              Status = "Package Not Installed", stringsAsFactors = FALSE
+            )
+            cur_st[[m]] <- list(state = "queued", label = m_name, detail = "Not Installed")
+            status_tracker(cur_st)
+            next
+          }
+
+          t_start <- proc.time()
+          res_row <- tryCatch({
+            if (m == "kamila") {
+              res <- kamila::kamila(
+                dat$conVars, dat$catVars, numClust = k, numInit = 5, maxIter = 25, calcNumClust = "none"
+              )
+              memb <- res$finalMemb
+            } else if (m == "gower_pam") {
+              gdist <- cluster::daisy(dat$fullData, metric = "gower")
+              pam_fit <- cluster::pam(gdist, k = k, diss = TRUE)
+              memb <- pam_fit$clustering
+            } else if (m == "kproto") {
+              kp_fit <- clustMixType::kproto(dat$fullData, k = k, nstart = 3, verbose = FALSE)
+              memb <- kp_fit$cluster
+            } else if (m == "cluspcamix") {
+              clus_fit <- clustrd::cluspcamix(dat$fullData, k = k, nstart = 3)
+              memb <- clus_fit$cluster
+            } else if (m == "varsellcm") {
+              v_fit <- VarSelLCM::VarSelCluster(dat$fullData, nbCluster = k, vbleSelec = FALSE, nbCore = 1)
+              memb <- v_fit@partitions
+            } else if (m == "flexmix") {
+              cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
+              comb_m <- as.matrix(cbind(scale(as.matrix(dat$conVars)), scale(cat_mat)))
+              f_fit <- flexmix::flexmix(
+                comb_m ~ 1, k = k, model = flexmix::FLXMCmvnorm(diagonal = TRUE), control = list(iter.max = 25)
+              )
+              memb <- flexmix::clusters(f_fit)
+            }
+
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+            ari <- calc_ari(dat$trueID, memb)
+            err <- calc_misclass_error(dat$trueID, memb)
+
+            cur_st[[m]] <- list(
+              state = "done", label = m_name,
+              detail = sprintf("Done (%0.0f ms, ARI = %0.2f)", t_elapsed, ari)
+            )
+            status_tracker(cur_st)
+
+            data.frame(
+              Method = m_name,
+              Package = m_pkg,
+              Time_ms = round(t_elapsed, 1),
+              ARI = round(ari, 4),
+              Error_Rate = round(err, 4),
+              Status = "Success",
+              stringsAsFactors = FALSE
+            )
+          }, error = function(e) {
+            cur_st[[m]] <- list(state = "error", label = m_name, detail = paste("Error:", e$message))
+            status_tracker(cur_st)
+
+            data.frame(
+              Method = m_name, Package = m_pkg, Time_ms = NA, ARI = NA, Error_Rate = NA,
+              Status = paste("Error:", substr(e$message, 1, 28)), stringsAsFactors = FALSE
+            )
+          })
+
+          results[[length(results) + 1]] <- res_row
         }
-      } else {
-        results[[length(results) + 1]] <- data.frame(
-          Method = "Gower + PAM", Package = "cluster", Time_ms = NA, ARI = NA, Error_Rate = NA,
-          Status = "Not Available", stringsAsFactors = FALSE
-        )
       }
-    }
-
-    # 3. K-Prototypes
-    if ("kproto" %in% selected_methods) {
-      if (has_pkg("clustMixType")) {
-        t_start <- proc.time()
-        res <- tryCatch({
-          clustMixType::kproto(dat$fullData, k = k, nstart = 3, verbose = FALSE)
-        }, error = function(e) NULL)
-        t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-        if (!is.null(res)) {
-          ari <- calc_ari(dat$trueID, res$cluster)
-          err <- calc_misclass_error(dat$trueID, res$cluster)
-          results[[length(results) + 1]] <- data.frame(
-            Method = "K-Prototypes",
-            Package = "clustMixType",
-            Time_ms = round(t_elapsed, 1),
-            ARI = round(ari, 4),
-            Error_Rate = round(err, 4),
-            Status = "Success",
-            stringsAsFactors = FALSE
-          )
-        }
-      } else {
-        results[[length(results) + 1]] <- data.frame(
-          Method = "K-Prototypes", Package = "clustMixType", Time_ms = NA, ARI = NA, Error_Rate = NA,
-          Status = "Not Available", stringsAsFactors = FALSE
-        )
-      }
-    }
-
-    # 4. ClusPCAMix
-    if ("cluspcamix" %in% selected_methods) {
-      if (has_pkg("clustrd")) {
-        t_start <- proc.time()
-        res <- tryCatch({
-          clustrd::cluspcamix(dat$fullData, k = k, nstart = 3)
-        }, error = function(e) NULL)
-        t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-        if (!is.null(res)) {
-          ari <- calc_ari(dat$trueID, res$cluster)
-          err <- calc_misclass_error(dat$trueID, res$cluster)
-          results[[length(results) + 1]] <- data.frame(
-            Method = "ClusPCAMix",
-            Package = "clustrd",
-            Time_ms = round(t_elapsed, 1),
-            ARI = round(ari, 4),
-            Error_Rate = round(err, 4),
-            Status = "Success",
-            stringsAsFactors = FALSE
-          )
-        }
-      } else {
-        results[[length(results) + 1]] <- data.frame(
-          Method = "ClusPCAMix", Package = "clustrd", Time_ms = NA, ARI = NA, Error_Rate = NA,
-          Status = "Not Available", stringsAsFactors = FALSE
-        )
-      }
-    }
-
-    # 5. VarSelLCM
-    if ("varsellcm" %in% selected_methods) {
-      if (has_pkg("VarSelLCM")) {
-        t_start <- proc.time()
-        res <- tryCatch({
-          VarSelLCM::VarSelCluster(dat$fullData, nbCluster = k, vbleSelec = FALSE, nbCore = 1)
-        }, error = function(e) NULL)
-        t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-        if (!is.null(res)) {
-          pred_c <- res@partitions
-          ari <- calc_ari(dat$trueID, pred_c)
-          err <- calc_misclass_error(dat$trueID, pred_c)
-          results[[length(results) + 1]] <- data.frame(
-            Method = "VarSelLCM",
-            Package = "VarSelLCM",
-            Time_ms = round(t_elapsed, 1),
-            ARI = round(ari, 4),
-            Error_Rate = round(err, 4),
-            Status = "Success",
-            stringsAsFactors = FALSE
-          )
-        }
-      } else {
-        results[[length(results) + 1]] <- data.frame(
-          Method = "VarSelLCM", Package = "VarSelLCM", Time_ms = NA, ARI = NA, Error_Rate = NA,
-          Status = "Not Available", stringsAsFactors = FALSE
-        )
-      }
-    }
-
-    # 6. FlexMix / Latent Class Mixture
-    if ("flexmix" %in% selected_methods) {
-      if (has_pkg("flexmix")) {
-        t_start <- proc.time()
-        res <- tryCatch({
-          flexmix::flexmix(
-            as.matrix(dat$conVars) ~ 1,
-            k = k,
-            model = flexmix::FLXMCmvnorm(diagonal = TRUE),
-            control = list(iter.max = 25)
-          )
-        }, error = function(e) NULL)
-        t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-        if (!is.null(res)) {
-          pred_c <- flexmix::clusters(res)
-          ari <- calc_ari(dat$trueID, pred_c)
-          err <- calc_misclass_error(dat$trueID, pred_c)
-          results[[length(results) + 1]] <- data.frame(
-            Method = "FlexMix",
-            Package = "flexmix",
-            Time_ms = round(t_elapsed, 1),
-            ARI = round(ari, 4),
-            Error_Rate = round(err, 4),
-            Status = "Success",
-            stringsAsFactors = FALSE
-          )
-        }
-      } else {
-        results[[length(results) + 1]] <- data.frame(
-          Method = "FlexMix", Package = "flexmix", Time_ms = NA, ARI = NA, Error_Rate = NA,
-          Status = "Not Available", stringsAsFactors = FALSE
-        )
-      }
-    }
+    )
 
     if (length(results) == 0) {
       return(data.frame(Message = "No techniques selected"))
@@ -482,126 +514,256 @@ server <- function(input, output, session) {
     true_k <- isolate(input$k_clusters)
     results <- list()
 
-    # 1. KAMILA Cluster Selection
-    if ("kamila" %in% selected_methods && has_pkg("kamila")) {
-      t_start <- proc.time()
-      res_k <- tryCatch({
-        kamila::kamila(
-          dat$conVars,
-          dat$catVars,
-          numClust = 2:5,
-          numInit = 3,
-          calcNumClust = "ps",
-          numPredStrCvRun = 5,
-          predStrThresh = 0.6
-        )
-      }, error = function(e) NULL)
-      t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+    withProgress(
+      message = "Running Cluster Selection (K in 2:5)",
+      detail = "Testing cluster criteria...",
+      value = 0,
+      {
+        # 1. KAMILA Cluster Selection
+        if ("kamila" %in% selected_methods) {
+          incProgress(0.2, detail = "Running KAMILA Prediction Strength...")
+          if (has_pkg("kamila")) {
+            t_start <- proc.time()
+            res_k <- tryCatch({
+              kamila::kamila(
+                dat$conVars,
+                dat$catVars,
+                numClust = 2:5,
+                numInit = 3,
+                calcNumClust = "ps",
+                numPredStrCvRun = 5,
+                predStrThresh = 0.6
+              )
+            }, error = function(e) NULL)
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
 
-      if (!is.null(res_k)) {
-        pred_k <- if (is.list(res_k$nClust)) res_k$nClust$bestNClust else res_k$nClust
-        ari <- calc_ari(dat$trueID, res_k$finalMemb)
-        results[[length(results) + 1]] <- data.frame(
-          Method = "KAMILA",
-          Package = "kamila",
-          True_K = true_k,
-          Predicted_K = pred_k,
-          Criterion = "Prediction Strength",
-          ARI = round(ari, 4),
-          Time_ms = round(t_elapsed, 1),
-          stringsAsFactors = FALSE
-        )
+            if (!is.null(res_k)) {
+              pred_k <- if (is.list(res_k$nClust)) res_k$nClust$bestNClust else res_k$nClust
+              ari <- calc_ari(dat$trueID, res_k$finalMemb)
+              results[[length(results) + 1]] <- data.frame(
+                Method = "KAMILA",
+                Package = "kamila",
+                True_K = true_k,
+                Predicted_K = pred_k,
+                Criterion = "Prediction Strength",
+                ARI = round(ari, 4),
+                Time_ms = round(t_elapsed, 1),
+                stringsAsFactors = FALSE
+              )
+            }
+          }
+        }
+
+        # 2. VarSelLCM Selection
+        if ("varsellcm" %in% selected_methods) {
+          incProgress(0.2, detail = "Running VarSelLCM Selection (BIC)...")
+          if (has_pkg("VarSelLCM")) {
+            t_start <- proc.time()
+            res_v <- tryCatch({
+              VarSelLCM::VarSelCluster(dat$fullData, nbCluster = 2:5, vbleSelec = FALSE, nbCore = 1)
+            }, error = function(e) NULL)
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+            if (!is.null(res_v)) {
+              pred_k <- res_v@nbCluster
+              ari <- calc_ari(dat$trueID, res_v@partitions)
+              results[[length(results) + 1]] <- data.frame(
+                Method = "VarSelLCM",
+                Package = "VarSelLCM",
+                True_K = true_k,
+                Predicted_K = pred_k,
+                Criterion = "BIC / MICL",
+                ARI = round(ari, 4),
+                Time_ms = round(t_elapsed, 1),
+                stringsAsFactors = FALSE
+              )
+            }
+          }
+        }
+
+        # 3. FlexMix Selection
+        if ("flexmix" %in% selected_methods) {
+          incProgress(0.2, detail = "Running FlexMix BIC Selection...")
+          if (has_pkg("flexmix")) {
+            t_start <- proc.time()
+            res_f <- tryCatch({
+              cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
+              comb_m <- as.matrix(cbind(scale(as.matrix(dat$conVars)), scale(cat_mat)))
+              m_step <- flexmix::stepFlexmix(
+                comb_m ~ 1,
+                k = 2:5,
+                nrep = 2,
+                model = flexmix::FLXMCmvnorm(diagonal = TRUE),
+                control = list(iter.max = 20)
+              )
+              best_m <- flexmix::getModel(m_step, "BIC")
+              list(k = best_m@k, memb = flexmix::clusters(best_m))
+            }, error = function(e) NULL)
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+            if (!is.null(res_f)) {
+              ari <- calc_ari(dat$trueID, res_f$memb)
+              results[[length(results) + 1]] <- data.frame(
+                Method = "FlexMix",
+                Package = "flexmix",
+                True_K = true_k,
+                Predicted_K = res_f$k,
+                Criterion = "BIC",
+                ARI = round(ari, 4),
+                Time_ms = round(t_elapsed, 1),
+                stringsAsFactors = FALSE
+              )
+            }
+          }
+        }
+
+        # 4. Gower + PAM Silhouette Selection
+        if ("gower_pam" %in% selected_methods) {
+          incProgress(0.2, detail = "Evaluating Gower + PAM Silhouette Widths...")
+          if (has_pkg("cluster")) {
+            t_start <- proc.time()
+            res_pam <- tryCatch({
+              g_dist <- cluster::daisy(dat$fullData, metric = "gower")
+              sils <- sapply(2:5, function(ki) {
+                cluster::pam(g_dist, k = ki, diss = TRUE)$silinfo$avg.width
+              })
+              best_ki <- (2:5)[which.max(sils)]
+              fit_best <- cluster::pam(g_dist, k = best_ki, diss = TRUE)
+              list(k = best_ki, memb = fit_best$clustering)
+            }, error = function(e) NULL)
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+            if (!is.null(res_pam)) {
+              ari <- calc_ari(dat$trueID, res_pam$memb)
+              results[[length(results) + 1]] <- data.frame(
+                Method = "Gower + PAM",
+                Package = "cluster",
+                True_K = true_k,
+                Predicted_K = res_pam$k,
+                Criterion = "Avg Silhouette Width",
+                ARI = round(ari, 4),
+                Time_ms = round(t_elapsed, 1),
+                stringsAsFactors = FALSE
+              )
+            }
+          }
+        }
+
+        # 5. K-Prototypes Validation Index Selection
+        if ("kproto" %in% selected_methods) {
+          incProgress(0.2, detail = "Running K-Prototypes Validation Indices...")
+          if (has_pkg("clustMixType")) {
+            t_start <- proc.time()
+            res_kp <- tryCatch({
+              val <- clustMixType::validation_kproto(
+                method = "cindex",
+                data = dat$fullData,
+                k = 2:5,
+                nstart = 2,
+                verbose = FALSE
+              )
+              best_k <- val$k_opt
+              fit_kp <- clustMixType::kproto(dat$fullData, k = best_k, nstart = 2, verbose = FALSE)
+              list(k = best_k, memb = fit_kp$cluster)
+            }, error = function(e) NULL)
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+            if (!is.null(res_kp)) {
+              ari <- calc_ari(dat$trueID, res_kp$memb)
+              results[[length(results) + 1]] <- data.frame(
+                Method = "K-Prototypes",
+                Package = "clustMixType",
+                True_K = true_k,
+                Predicted_K = res_kp$k,
+                Criterion = "C-Index Validation",
+                ARI = round(ari, 4),
+                Time_ms = round(t_elapsed, 1),
+                stringsAsFactors = FALSE
+              )
+            }
+          }
+        }
       }
-    }
-
-    # 2. VarSelLCM Selection
-    if ("varsellcm" %in% selected_methods && has_pkg("VarSelLCM")) {
-      t_start <- proc.time()
-      res_v <- tryCatch({
-        VarSelLCM::VarSelCluster(dat$fullData, nbCluster = 2:5, vbleSelec = FALSE, nbCore = 1)
-      }, error = function(e) NULL)
-      t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-      if (!is.null(res_v)) {
-        pred_k <- res_v@nbCluster
-        ari <- calc_ari(dat$trueID, res_v@partitions)
-        results[[length(results) + 1]] <- data.frame(
-          Method = "VarSelLCM",
-          Package = "VarSelLCM",
-          True_K = true_k,
-          Predicted_K = pred_k,
-          Criterion = "BIC / MICL",
-          ARI = round(ari, 4),
-          Time_ms = round(t_elapsed, 1),
-          stringsAsFactors = FALSE
-        )
-      }
-    }
-
-    # 3. FlexMix Selection
-    if ("flexmix" %in% selected_methods && has_pkg("flexmix")) {
-      t_start <- proc.time()
-      res_f <- tryCatch({
-        m_step <- flexmix::stepFlexmix(
-          as.matrix(dat$conVars) ~ 1,
-          k = 2:5,
-          nrep = 2,
-          model = flexmix::FLXMCmvnorm(diagonal = TRUE),
-          control = list(iter.max = 20)
-        )
-        best_m <- flexmix::getModel(m_step, "BIC")
-        list(k = best_m@k, memb = flexmix::clusters(best_m))
-      }, error = function(e) NULL)
-      t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-      if (!is.null(res_f)) {
-        ari <- calc_ari(dat$trueID, res_f$memb)
-        results[[length(results) + 1]] <- data.frame(
-          Method = "FlexMix",
-          Package = "flexmix",
-          True_K = true_k,
-          Predicted_K = res_f$k,
-          Criterion = "BIC",
-          ARI = round(ari, 4),
-          Time_ms = round(t_elapsed, 1),
-          stringsAsFactors = FALSE
-        )
-      }
-    }
-
-    # 4. Gower + PAM Silhouette Selection
-    if ("gower_pam" %in% selected_methods && has_pkg("cluster")) {
-      t_start <- proc.time()
-      res_pam <- tryCatch({
-        g_dist <- cluster::daisy(dat$fullData, metric = "gower")
-        sils <- sapply(2:5, function(ki) {
-          cluster::pam(g_dist, k = ki, diss = TRUE)$silinfo$avg.width
-        })
-        best_ki <- (2:5)[which.max(sils)]
-        fit_best <- cluster::pam(g_dist, k = best_ki, diss = TRUE)
-        list(k = best_ki, memb = fit_best$clustering)
-      }, error = function(e) NULL)
-      t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-      if (!is.null(res_pam)) {
-        ari <- calc_ari(dat$trueID, res_pam$memb)
-        results[[length(results) + 1]] <- data.frame(
-          Method = "Gower + PAM",
-          Package = "cluster",
-          True_K = true_k,
-          Predicted_K = res_pam$k,
-          Criterion = "Avg Silhouette Width",
-          ARI = round(ari, 4),
-          Time_ms = round(t_elapsed, 1),
-          stringsAsFactors = FALSE
-        )
-      }
-    }
+    )
 
     if (length(results) == 0) {
       return(data.frame(Message = "Run selection by clicking 'Run Cluster Selection (K in 2:5)'"))
     }
     do.call(rbind, results)
+  })
+
+  # ----------------------------------------------------------------------------
+  # Multi-Method Cluster Membership Cache for Projection
+  # ----------------------------------------------------------------------------
+  cluster_assignments <- reactive({
+    dat <- sim_data()
+    k <- isolate(input$k_clusters)
+    membs <- list(true = dat$trueID)
+
+    # KAMILA
+    if (has_pkg("kamila")) {
+      kam_res <- tryCatch({
+        kamila::kamila(
+          dat$conVars,
+          dat$catVars,
+          numClust = k,
+          numInit = 3,
+          calcNumClust = "none"
+        )$finalMemb
+      }, error = function(e) NULL)
+      if (!is.null(kam_res)) membs$kamila <- kam_res
+    }
+
+    # Gower + PAM
+    if (has_pkg("cluster")) {
+      pam_res <- tryCatch({
+        g_dist <- cluster::daisy(dat$fullData, metric = "gower")
+        cluster::pam(g_dist, k = k, diss = TRUE)$clustering
+      }, error = function(e) NULL)
+      if (!is.null(pam_res)) membs$gower_pam <- pam_res
+    }
+
+    # K-Prototypes
+    if (has_pkg("clustMixType")) {
+      kp_res <- tryCatch({
+        clustMixType::kproto(dat$fullData, k = k, nstart = 2, verbose = FALSE)$cluster
+      }, error = function(e) NULL)
+      if (!is.null(kp_res)) membs$kproto <- kp_res
+    }
+
+    # ClusPCAMix
+    if (has_pkg("clustrd")) {
+      clus_res <- tryCatch({
+        clustrd::cluspcamix(dat$fullData, k = k, nstart = 2)$cluster
+      }, error = function(e) NULL)
+      if (!is.null(clus_res)) membs$cluspcamix <- clus_res
+    }
+
+    # VarSelLCM
+    if (has_pkg("VarSelLCM")) {
+      v_res <- tryCatch({
+        VarSelLCM::VarSelCluster(dat$fullData, nbCluster = k, vbleSelec = FALSE, nbCore = 1)@partitions
+      }, error = function(e) NULL)
+      if (!is.null(v_res)) membs$varsellcm <- v_res
+    }
+
+    # FlexMix
+    if (has_pkg("flexmix")) {
+      f_res <- tryCatch({
+        cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
+        comb_m <- as.matrix(cbind(scale(as.matrix(dat$conVars)), scale(cat_mat)))
+        m <- flexmix::flexmix(
+          comb_m ~ 1,
+          k = k,
+          model = flexmix::FLXMCmvnorm(diagonal = TRUE),
+          control = list(iter.max = 20)
+        )
+        flexmix::clusters(m)
+      }, error = function(e) NULL)
+      if (!is.null(f_res)) membs$flexmix <- f_res
+    }
+
+    membs
   })
 
   # Render Tables & Plots
@@ -652,7 +814,7 @@ server <- function(input, output, session) {
     if (nrow(valid_res) == 0) return(NULL)
 
     par(mar = c(5, 5, 3, 1))
-    b <- barplot(
+    barplot(
       valid_res$Predicted_K,
       names.arg = valid_res$Method,
       col = "#3498db",
@@ -665,52 +827,104 @@ server <- function(input, output, session) {
     legend("topright", legend = paste("True K =", isolate(input$k_clusters)), col = "red", lty = 2, lwd = 2)
   })
 
-  # 2D PCA Cluster Plot
-  output$pca_cluster_plot <- renderPlot({
+  # ----------------------------------------------------------------------------
+  # LDA Cluster Projection Plot (True Points LDA with Multi-Method Assignments)
+  # ----------------------------------------------------------------------------
+  output$lda_cluster_plot <- renderPlot({
     dat <- sim_data()
-    cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
-    combined_mat <- cbind(scale(as.matrix(dat$conVars)), scale(cat_mat))
+    all_membs <- cluster_assignments()
+    k_true <- isolate(input$k_clusters)
 
-    pca_fit <- prcomp(combined_mat, center = TRUE, scale. = FALSE)
-    pca_coords <- pca_fit$x[, 1:2]
+    # Construct design matrix for true LDA projection
+    cat_mat <- model.matrix(~ ., data = dat$catVars)[, -1, drop = FALSE]
+    comb_mat <- cbind(scale(as.matrix(dat$conVars)), scale(cat_mat))
+    zv <- apply(comb_mat, 2, function(x) var(x, na.rm = TRUE) == 0 || is.na(var(x)))
+    comb_mat <- comb_mat[, !zv, drop = FALSE]
 
-    kam_clust <- if (has_pkg("kamila")) {
-      tryCatch({
-        kam_out <- kamila::kamila(
-          dat$conVars,
-          dat$catVars,
-          numClust = input$k_clusters,
-          numInit = 3,
-          calcNumClust = "none"
-        )
-        kam_out$finalMemb
-      }, error = function(e) dat$trueID)
+    df_lda <- as.data.frame(comb_mat)
+    df_lda$class <- as.factor(dat$trueID)
+
+    # Compute LDA using true ground truth classes
+    lda_fit <- MASS::lda(class ~ ., data = df_lda, tol = 1e-4)
+    lda_pred <- predict(lda_fit, newdata = df_lda)
+    lda_x <- lda_pred$x
+
+    # Coordinate setup: If K == 2, LD1 + 1st Con variable; if K >= 3, LD1 + LD2
+    if (ncol(lda_x) >= 2) {
+      coords_x <- lda_x[, 1]
+      coords_y <- lda_x[, 2]
+      xlab_txt <- "Linear Discriminant 1 (LD1)"
+      ylab_txt <- "Linear Discriminant 2 (LD2)"
     } else {
-      dat$trueID
+      coords_x <- lda_x[, 1]
+      coords_y <- dat$conVars[, 1]
+      xlab_txt <- "Linear Discriminant 1 (LD1)"
+      ylab_txt <- "Continuous Feature 1 (Con_1)"
     }
 
-    par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
-    palette <- c("#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6")
+    palette <- c("#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22")
 
-    plot(
-      pca_coords,
-      col = palette[dat$trueID],
-      pch = 19,
-      cex = 0.9,
-      main = paste0("True Clusters (N = ", nrow(dat$conVars), ")"),
-      xlab = "PC 1", ylab = "PC 2"
+    method_labels <- c(
+      true = "True Ground Truth",
+      kamila = "KAMILA (kamila)",
+      gower_pam = "Gower + PAM (cluster)",
+      kproto = "K-Prototypes (clustMixType)",
+      cluspcamix = "ClusPCAMix (clustrd)",
+      varsellcm = "VarSelLCM",
+      flexmix = "FlexMix"
     )
-    grid()
 
-    plot(
-      pca_coords,
-      col = palette[kam_clust],
-      pch = 17,
-      cex = 0.9,
-      main = "KAMILA Predicted Clusters",
-      xlab = "PC 1", ylab = "PC 2"
-    )
-    grid()
+    if (input$proj_view == "single") {
+      # Single Focused Plot
+      target_m <- input$proj_single_method
+      cur_memb <- if (target_m %in% names(all_membs)) all_membs[[target_m]] else dat$trueID
+      title_str <- method_labels[target_m]
+      if (is.na(title_str)) title_str <- target_m
+
+      par(mar = c(5, 5, 4, 2))
+      plot(
+        coords_x, coords_y,
+        col = palette[cur_memb],
+        pch = 19,
+        cex = 1.0,
+        main = paste0("LDA Discriminant Projection: ", title_str, " (N = ", length(coords_x), ")"),
+        xlab = xlab_txt,
+        ylab = ylab_txt
+      )
+      grid()
+      legend(
+        "topright",
+        legend = paste("Cluster", seq_len(k_true)),
+        col = palette[seq_len(k_true)],
+        pch = 19,
+        bg = "white"
+      )
+    } else {
+      # Multi-Method Grid View
+      avail_keys <- names(all_membs)
+      n_plots <- length(avail_keys)
+      n_cols <- if (n_plots <= 2) 2 else if (n_plots <= 4) 2 else 3
+      n_rows <- ceiling(n_plots / n_cols)
+
+      par(mfrow = c(n_rows, n_cols), mar = c(4, 4, 3, 1))
+
+      for (m_key in avail_keys) {
+        cur_memb <- all_membs[[m_key]]
+        m_title <- method_labels[m_key]
+        if (is.na(m_title)) m_title <- m_key
+
+        plot(
+          coords_x, coords_y,
+          col = palette[cur_memb],
+          pch = if (m_key == "true") 19 else 17,
+          cex = 0.8,
+          main = m_title,
+          xlab = xlab_txt,
+          ylab = ylab_txt
+        )
+        grid()
+      }
+    }
   })
 
   # Environment Information
