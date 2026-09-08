@@ -46,6 +46,11 @@ Suggests:
     covr,
     xml2,
     shiny,
-    cluster
+    cluster,
+    clustMixType,
+    clustrd,
+    VarSelLCM,
+    flexmix,
+    mixtools
 Config/roxygen2/version: 8.1.0
 Config/testthat/edition: 3
