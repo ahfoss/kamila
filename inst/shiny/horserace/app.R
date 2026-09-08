@@ -451,10 +451,14 @@ server <- function(input, output, session) {
               kp_fit <- clustMixType::kproto(dat$fullData, k = k, nstart = 3, verbose = FALSE)
               memb <- kp_fit$cluster
             } else if (m == "cluspcamix") {
-              clus_fit <- clustrd::cluspcamix(dat$fullData, k = k, nstart = 3)
+              # clustrd::cluspcamix uses nclus and ndim
+              clus_fit <- clustrd::cluspcamix(data = dat$fullData, nclus = k, ndim = 2, nstart = 3)
               memb <- clus_fit$cluster
             } else if (m == "varsellcm") {
-              v_fit <- VarSelLCM::VarSelCluster(dat$fullData, nbCluster = k, vbleSelec = FALSE, nbCore = 1)
+              # VarSelLCM::VarSelCluster uses x and gvals
+              v_fit <- VarSelLCM::VarSelCluster(
+                x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+              )
               memb <- v_fit@partitions
             } else if (m == "flexmix") {
               cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
@@ -521,7 +525,7 @@ server <- function(input, output, session) {
       {
         # 1. KAMILA Cluster Selection
         if ("kamila" %in% selected_methods) {
-          incProgress(0.2, detail = "Running KAMILA Prediction Strength...")
+          incProgress(0.16, detail = "Running KAMILA Prediction Strength...")
           if (has_pkg("kamila")) {
             t_start <- proc.time()
             res_k <- tryCatch({
@@ -554,72 +558,9 @@ server <- function(input, output, session) {
           }
         }
 
-        # 2. VarSelLCM Selection
-        if ("varsellcm" %in% selected_methods) {
-          incProgress(0.2, detail = "Running VarSelLCM Selection (BIC)...")
-          if (has_pkg("VarSelLCM")) {
-            t_start <- proc.time()
-            res_v <- tryCatch({
-              VarSelLCM::VarSelCluster(dat$fullData, nbCluster = 2:5, vbleSelec = FALSE, nbCore = 1)
-            }, error = function(e) NULL)
-            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-            if (!is.null(res_v)) {
-              pred_k <- res_v@nbCluster
-              ari <- calc_ari(dat$trueID, res_v@partitions)
-              results[[length(results) + 1]] <- data.frame(
-                Method = "VarSelLCM",
-                Package = "VarSelLCM",
-                True_K = true_k,
-                Predicted_K = pred_k,
-                Criterion = "BIC / MICL",
-                ARI = round(ari, 4),
-                Time_ms = round(t_elapsed, 1),
-                stringsAsFactors = FALSE
-              )
-            }
-          }
-        }
-
-        # 3. FlexMix Selection
-        if ("flexmix" %in% selected_methods) {
-          incProgress(0.2, detail = "Running FlexMix BIC Selection...")
-          if (has_pkg("flexmix")) {
-            t_start <- proc.time()
-            res_f <- tryCatch({
-              cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
-              comb_m <- as.matrix(cbind(scale(as.matrix(dat$conVars)), scale(cat_mat)))
-              m_step <- flexmix::stepFlexmix(
-                comb_m ~ 1,
-                k = 2:5,
-                nrep = 2,
-                model = flexmix::FLXMCmvnorm(diagonal = TRUE),
-                control = list(iter.max = 20)
-              )
-              best_m <- flexmix::getModel(m_step, "BIC")
-              list(k = best_m@k, memb = flexmix::clusters(best_m))
-            }, error = function(e) NULL)
-            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-
-            if (!is.null(res_f)) {
-              ari <- calc_ari(dat$trueID, res_f$memb)
-              results[[length(results) + 1]] <- data.frame(
-                Method = "FlexMix",
-                Package = "flexmix",
-                True_K = true_k,
-                Predicted_K = res_f$k,
-                Criterion = "BIC",
-                ARI = round(ari, 4),
-                Time_ms = round(t_elapsed, 1),
-                stringsAsFactors = FALSE
-              )
-            }
-          }
-        }
-
-        # 4. Gower + PAM Silhouette Selection
+        # 2. Gower + PAM Silhouette Selection
         if ("gower_pam" %in% selected_methods) {
-          incProgress(0.2, detail = "Evaluating Gower + PAM Silhouette Widths...")
+          incProgress(0.16, detail = "Evaluating Gower + PAM Silhouette Widths...")
           if (has_pkg("cluster")) {
             t_start <- proc.time()
             res_pam <- tryCatch({
@@ -649,14 +590,14 @@ server <- function(input, output, session) {
           }
         }
 
-        # 5. K-Prototypes Validation Index Selection
+        # 3. K-Prototypes Validation Index Selection
         if ("kproto" %in% selected_methods) {
-          incProgress(0.2, detail = "Running K-Prototypes Validation Indices...")
+          incProgress(0.16, detail = "Running K-Prototypes Validation Indices...")
           if (has_pkg("clustMixType")) {
             t_start <- proc.time()
             res_kp <- tryCatch({
               val <- clustMixType::validation_kproto(
-                method = "cindex",
+                method = "silhouette",
                 data = dat$fullData,
                 k = 2:5,
                 nstart = 2,
@@ -675,7 +616,103 @@ server <- function(input, output, session) {
                 Package = "clustMixType",
                 True_K = true_k,
                 Predicted_K = res_kp$k,
-                Criterion = "C-Index Validation",
+                Criterion = "Silhouette Index",
+                ARI = round(ari, 4),
+                Time_ms = round(t_elapsed, 1),
+                stringsAsFactors = FALSE
+              )
+            }
+          }
+        }
+
+        # 4. ClusPCAMix Selection
+        if ("cluspcamix" %in% selected_methods) {
+          incProgress(0.16, detail = "Running ClusPCAMix Selection...")
+          if (has_pkg("clustrd")) {
+            t_start <- proc.time()
+            res_c <- tryCatch({
+              fits <- lapply(2:5, function(ki) {
+                clustrd::cluspcamix(data = dat$fullData, nclus = ki, ndim = 2, nstart = 2)
+              })
+              objs <- sapply(fits, function(f) f$criterion)
+              best_ki <- (2:5)[which.max(objs)]
+              list(k = best_ki, memb = fits[[which.max(objs)]]$cluster)
+            }, error = function(e) NULL)
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+            if (!is.null(res_c)) {
+              ari <- calc_ari(dat$trueID, res_c$memb)
+              results[[length(results) + 1]] <- data.frame(
+                Method = "ClusPCAMix",
+                Package = "clustrd",
+                True_K = true_k,
+                Predicted_K = res_c$k,
+                Criterion = "Objective Value",
+                ARI = round(ari, 4),
+                Time_ms = round(t_elapsed, 1),
+                stringsAsFactors = FALSE
+              )
+            }
+          }
+        }
+
+        # 5. VarSelLCM Selection
+        if ("varsellcm" %in% selected_methods) {
+          incProgress(0.16, detail = "Running VarSelLCM Selection (BIC)...")
+          if (has_pkg("VarSelLCM")) {
+            t_start <- proc.time()
+            res_v <- tryCatch({
+              VarSelLCM::VarSelCluster(
+                x = dat$fullData, gvals = 2:5, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+              )
+            }, error = function(e) NULL)
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+            if (!is.null(res_v)) {
+              pred_k <- res_v@g
+              ari <- calc_ari(dat$trueID, res_v@partitions)
+              results[[length(results) + 1]] <- data.frame(
+                Method = "VarSelLCM",
+                Package = "VarSelLCM",
+                True_K = true_k,
+                Predicted_K = pred_k,
+                Criterion = "BIC / MICL",
+                ARI = round(ari, 4),
+                Time_ms = round(t_elapsed, 1),
+                stringsAsFactors = FALSE
+              )
+            }
+          }
+        }
+
+        # 6. FlexMix Selection
+        if ("flexmix" %in% selected_methods) {
+          incProgress(0.16, detail = "Running FlexMix BIC Selection...")
+          if (has_pkg("flexmix")) {
+            t_start <- proc.time()
+            res_f <- tryCatch({
+              cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
+              comb_m <- as.matrix(cbind(scale(as.matrix(dat$conVars)), scale(cat_mat)))
+              m_step <- flexmix::stepFlexmix(
+                comb_m ~ 1,
+                k = 2:5,
+                nrep = 2,
+                model = flexmix::FLXMCmvnorm(diagonal = TRUE),
+                control = list(iter.max = 20)
+              )
+              best_m <- flexmix::getModel(m_step, which = "BIC")
+              list(k = best_m@k, memb = flexmix::clusters(best_m))
+            }, error = function(e) NULL)
+            t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+            if (!is.null(res_f)) {
+              ari <- calc_ari(dat$trueID, res_f$memb)
+              results[[length(results) + 1]] <- data.frame(
+                Method = "FlexMix",
+                Package = "flexmix",
+                True_K = true_k,
+                Predicted_K = res_f$k,
+                Criterion = "BIC",
                 ARI = round(ari, 4),
                 Time_ms = round(t_elapsed, 1),
                 stringsAsFactors = FALSE
@@ -734,7 +771,7 @@ server <- function(input, output, session) {
     # ClusPCAMix
     if (has_pkg("clustrd")) {
       clus_res <- tryCatch({
-        clustrd::cluspcamix(dat$fullData, k = k, nstart = 2)$cluster
+        clustrd::cluspcamix(data = dat$fullData, nclus = k, ndim = 2, nstart = 2)$cluster
       }, error = function(e) NULL)
       if (!is.null(clus_res)) membs$cluspcamix <- clus_res
     }
@@ -742,7 +779,9 @@ server <- function(input, output, session) {
     # VarSelLCM
     if (has_pkg("VarSelLCM")) {
       v_res <- tryCatch({
-        VarSelLCM::VarSelCluster(dat$fullData, nbCluster = k, vbleSelec = FALSE, nbCore = 1)@partitions
+        VarSelLCM::VarSelCluster(
+          x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+        )@partitions
       }, error = function(e) NULL)
       if (!is.null(v_res)) membs$varsellcm <- v_res
     }
