@@ -51,6 +51,8 @@ Suggests:
     clustrd,
     VarSelLCM,
     flexmix,
+    mvtnorm,
+    mclust,
     mixtools,
     MASS
 Config/roxygen2/version: 8.1.0

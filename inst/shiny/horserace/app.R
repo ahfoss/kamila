@@ -10,7 +10,7 @@ if (requireNamespace("shiny", quietly = TRUE)) {
 # If running inside WebR / WebAssembly browser environment, automatically install packages
 if (exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1") {
   tryCatch({
-    webr::install(c("clustMixType", "clustrd", "VarSelLCM", "flexmix", "mclust", "MASS"))
+    webr::install(c("clustMixType", "clustrd", "VarSelLCM", "flexmix", "mvtnorm", "mclust", "MASS"))
   }, error = function(e) NULL)
 }
 
@@ -18,14 +18,26 @@ if (exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1") {
 has_pkg <- function(pkg) requireNamespace(pkg, quietly = TRUE)
 
 # ------------------------------------------------------------------------------
-# Evaluation Metrics: Adjusted Rand Index & Misclassification Error
+# Helpers: Safe Scaling & Evaluation Metrics
 # ------------------------------------------------------------------------------
+safe_scale <- function(m) {
+  m_mat <- as.matrix(m)
+  sds <- apply(m_mat, 2, sd, na.rm = TRUE)
+  sds_valid <- ifelse(is.na(sds) | sds == 0, 1, sds)
+  m_scaled <- scale(m_mat, center = TRUE, scale = sds_valid)
+  m_scaled[is.na(m_scaled)] <- 0
+  m_scaled
+}
+
 calc_ari <- function(true_labels, pred_labels) {
+  true_v <- as.vector(as.integer(true_labels))
+  pred_v <- as.vector(as.integer(pred_labels))
+
   if (has_pkg("mclust")) {
-    return(mclust::adjustedRandIndex(true_labels, pred_labels))
+    return(mclust::adjustedRandIndex(true_v, pred_v))
   }
-  tab <- table(true_labels, pred_labels)
-  n <- length(true_labels)
+  tab <- table(true_v, pred_v)
+  n <- length(true_v)
   if (n < 2) return(1.0)
 
   comb2 <- function(x) x * (x - 1) / 2
@@ -41,7 +53,10 @@ calc_ari <- function(true_labels, pred_labels) {
 }
 
 calc_misclass_error <- function(true_labels, pred_labels) {
-  tab <- table(true_labels, pred_labels)
+  true_v <- as.vector(as.integer(true_labels))
+  pred_v <- as.vector(as.integer(pred_labels))
+
+  tab <- table(true_v, pred_v)
   k_true <- nrow(tab)
   k_pred <- ncol(tab)
 
@@ -55,7 +70,7 @@ calc_misclass_error <- function(true_labels, pred_labels) {
       temp_tab[max_idx[1], ] <- -1
       temp_tab[, max_idx[2]] <- -1
     }
-    return(1 - (matched_correct / length(true_labels)))
+    return(1 - (matched_correct / length(true_v)))
   }
 
   # Exact permutation matching for K <= 6
@@ -76,7 +91,7 @@ calc_misclass_error <- function(true_labels, pred_labels) {
     }))
     if (cur_correct > max_correct) max_correct <- cur_correct
   }
-  1 - (max_correct / length(true_labels))
+  1 - (max_correct / length(true_v))
 }
 
 # ------------------------------------------------------------------------------
@@ -442,31 +457,35 @@ server <- function(input, output, session) {
               res <- kamila::kamila(
                 dat$conVars, dat$catVars, numClust = k, numInit = 5, maxIter = 25, calcNumClust = "none"
               )
-              memb <- res$finalMemb
+              memb <- as.integer(res$finalMemb)
             } else if (m == "gower_pam") {
               gdist <- cluster::daisy(dat$fullData, metric = "gower")
               pam_fit <- cluster::pam(gdist, k = k, diss = TRUE)
-              memb <- pam_fit$clustering
+              memb <- as.integer(pam_fit$clustering)
             } else if (m == "kproto") {
               kp_fit <- clustMixType::kproto(dat$fullData, k = k, nstart = 3, verbose = FALSE)
-              memb <- kp_fit$cluster
+              memb <- as.integer(kp_fit$cluster)
             } else if (m == "cluspcamix") {
-              # clustrd::cluspcamix uses nclus and ndim
               clus_fit <- clustrd::cluspcamix(data = dat$fullData, nclus = k, ndim = 2, nstart = 3)
-              memb <- clus_fit$cluster
+              memb <- as.integer(clus_fit$cluster)
             } else if (m == "varsellcm") {
-              # VarSelLCM::VarSelCluster uses x and gvals
               v_fit <- VarSelLCM::VarSelCluster(
                 x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
               )
-              memb <- v_fit@partitions
+              memb <- as.integer(VarSelLCM::fitted(v_fit, type = "partition"))
             } else if (m == "flexmix") {
               cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
-              comb_m <- as.matrix(cbind(scale(as.matrix(dat$conVars)), scale(cat_mat)))
+              con_mat <- as.matrix(dat$conVars)
               f_fit <- flexmix::flexmix(
-                comb_m ~ 1, k = k, model = flexmix::FLXMCmvnorm(diagonal = TRUE), control = list(iter.max = 25)
+                cbind(con_mat, cat_mat) ~ 1,
+                k = k,
+                model = list(
+                  flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),
+                  flexmix::FLXMCmvbinary(cat_mat ~ 1)
+                ),
+                control = list(iter.max = 30, minprior = 0.05, verbose = 0)
               )
-              memb <- flexmix::clusters(f_fit)
+              memb <- as.integer(flexmix::clusters(f_fit))
             }
 
             t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
@@ -570,7 +589,7 @@ server <- function(input, output, session) {
               })
               best_ki <- (2:5)[which.max(sils)]
               fit_best <- cluster::pam(g_dist, k = best_ki, diss = TRUE)
-              list(k = best_ki, memb = fit_best$clustering)
+              list(k = best_ki, memb = as.integer(fit_best$clustering))
             }, error = function(e) NULL)
             t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
 
@@ -605,7 +624,7 @@ server <- function(input, output, session) {
               )
               best_k <- val$k_opt
               fit_kp <- clustMixType::kproto(dat$fullData, k = best_k, nstart = 2, verbose = FALSE)
-              list(k = best_k, memb = fit_kp$cluster)
+              list(k = best_k, memb = as.integer(fit_kp$cluster))
             }, error = function(e) NULL)
             t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
 
@@ -636,7 +655,7 @@ server <- function(input, output, session) {
               })
               objs <- sapply(fits, function(f) f$criterion)
               best_ki <- (2:5)[which.max(objs)]
-              list(k = best_ki, memb = fits[[which.max(objs)]]$cluster)
+              list(k = best_ki, memb = as.integer(fits[[which.max(objs)]]$cluster))
             }, error = function(e) NULL)
             t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
 
@@ -669,8 +688,15 @@ server <- function(input, output, session) {
             t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
 
             if (!is.null(res_v)) {
-              pred_k <- res_v@g
-              ari <- calc_ari(dat$trueID, res_v@partitions)
+              memb_v <- as.integer(VarSelLCM::fitted(res_v, type = "partition"))
+              pred_k <- tryCatch({
+                if (methods::.hasSlot(res_v, "model") && methods::.hasSlot(res_v@model, "g")) {
+                  as.integer(res_v@model@g)
+                } else {
+                  length(unique(memb_v))
+                }
+              }, error = function(e) length(unique(memb_v)))
+              ari <- calc_ari(dat$trueID, memb_v)
               results[[length(results) + 1]] <- data.frame(
                 Method = "VarSelLCM",
                 Package = "VarSelLCM",
@@ -692,16 +718,19 @@ server <- function(input, output, session) {
             t_start <- proc.time()
             res_f <- tryCatch({
               cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
-              comb_m <- as.matrix(cbind(scale(as.matrix(dat$conVars)), scale(cat_mat)))
+              con_mat <- as.matrix(dat$conVars)
               m_step <- flexmix::stepFlexmix(
-                comb_m ~ 1,
+                cbind(con_mat, cat_mat) ~ 1,
                 k = 2:5,
                 nrep = 2,
-                model = flexmix::FLXMCmvnorm(diagonal = TRUE),
-                control = list(iter.max = 20)
+                model = list(
+                  flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),
+                  flexmix::FLXMCmvbinary(cat_mat ~ 1)
+                ),
+                control = list(iter.max = 20, minprior = 0.05, verbose = 0)
               )
               best_m <- flexmix::getModel(m_step, which = "BIC")
-              list(k = best_m@k, memb = flexmix::clusters(best_m))
+              list(k = best_m@k, memb = as.integer(flexmix::clusters(best_m)))
             }, error = function(e) NULL)
             t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
 
@@ -740,13 +769,13 @@ server <- function(input, output, session) {
     # KAMILA
     if (has_pkg("kamila")) {
       kam_res <- tryCatch({
-        kamila::kamila(
+        as.integer(kamila::kamila(
           dat$conVars,
           dat$catVars,
           numClust = k,
           numInit = 3,
           calcNumClust = "none"
-        )$finalMemb
+        )$finalMemb)
       }, error = function(e) NULL)
       if (!is.null(kam_res)) membs$kamila <- kam_res
     }
@@ -755,7 +784,7 @@ server <- function(input, output, session) {
     if (has_pkg("cluster")) {
       pam_res <- tryCatch({
         g_dist <- cluster::daisy(dat$fullData, metric = "gower")
-        cluster::pam(g_dist, k = k, diss = TRUE)$clustering
+        as.integer(cluster::pam(g_dist, k = k, diss = TRUE)$clustering)
       }, error = function(e) NULL)
       if (!is.null(pam_res)) membs$gower_pam <- pam_res
     }
@@ -763,7 +792,7 @@ server <- function(input, output, session) {
     # K-Prototypes
     if (has_pkg("clustMixType")) {
       kp_res <- tryCatch({
-        clustMixType::kproto(dat$fullData, k = k, nstart = 2, verbose = FALSE)$cluster
+        as.integer(clustMixType::kproto(dat$fullData, k = k, nstart = 2, verbose = FALSE)$cluster)
       }, error = function(e) NULL)
       if (!is.null(kp_res)) membs$kproto <- kp_res
     }
@@ -771,7 +800,7 @@ server <- function(input, output, session) {
     # ClusPCAMix
     if (has_pkg("clustrd")) {
       clus_res <- tryCatch({
-        clustrd::cluspcamix(data = dat$fullData, nclus = k, ndim = 2, nstart = 2)$cluster
+        as.integer(clustrd::cluspcamix(data = dat$fullData, nclus = k, ndim = 2, nstart = 2)$cluster)
       }, error = function(e) NULL)
       if (!is.null(clus_res)) membs$cluspcamix <- clus_res
     }
@@ -779,9 +808,10 @@ server <- function(input, output, session) {
     # VarSelLCM
     if (has_pkg("VarSelLCM")) {
       v_res <- tryCatch({
-        VarSelLCM::VarSelCluster(
+        v_fit <- VarSelLCM::VarSelCluster(
           x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
-        )@partitions
+        )
+        as.integer(VarSelLCM::fitted(v_fit, type = "partition"))
       }, error = function(e) NULL)
       if (!is.null(v_res)) membs$varsellcm <- v_res
     }
@@ -790,14 +820,17 @@ server <- function(input, output, session) {
     if (has_pkg("flexmix")) {
       f_res <- tryCatch({
         cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
-        comb_m <- as.matrix(cbind(scale(as.matrix(dat$conVars)), scale(cat_mat)))
+        con_mat <- as.matrix(dat$conVars)
         m <- flexmix::flexmix(
-          comb_m ~ 1,
+          cbind(con_mat, cat_mat) ~ 1,
           k = k,
-          model = flexmix::FLXMCmvnorm(diagonal = TRUE),
-          control = list(iter.max = 20)
+          model = list(
+            flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),
+            flexmix::FLXMCmvbinary(cat_mat ~ 1)
+          ),
+          control = list(iter.max = 20, minprior = 0.05, verbose = 0)
         )
-        flexmix::clusters(m)
+        as.integer(flexmix::clusters(m))
       }, error = function(e) NULL)
       if (!is.null(f_res)) membs$flexmix <- f_res
     }
