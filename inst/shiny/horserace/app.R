@@ -466,25 +466,56 @@ run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_c
     on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
   }
 
-  if (is.function(progress_fn)) {
-    progress_fn(1, 2, sprintf("Dispatched %d methods in parallel across %d cores...", n_methods, n_workers))
+  args_list <- list(...)
+  worker_exec <- function(m, args) {
+    res <- do.call(runner_fn, c(list(m = m), args))
+    list(m = m, result = res)
   }
 
-  args_list <- list(...)
   parallel::clusterExport(
     cl,
-    varlist = c("has_pkg", "safe_scale", "calc_ari", "calc_misclass_error", "method_meta", "runner_fn", "args_list"),
+    varlist = c(
+      "has_pkg", "safe_scale", "calc_ari", "calc_misclass_error",
+      "method_meta", "runner_fn", "args_list", "worker_exec"
+    ),
     envir = environment()
   )
 
   t_start <- proc.time()
-  res <- parallel::parLapply(cl, method_keys, function(m) {
-    do.call(runner_fn, c(list(m = m), args_list))
-  })
-  t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-  if (is.function(progress_fn)) {
-    progress_fn(2, 2, "Completed parallel computation!")
+  submitted <- min(n_workers, n_methods)
+  for (i in seq_len(submitted)) {
+    parallel:::sendCall(
+      cl[[i]],
+      worker_exec,
+      list(m = method_keys[i], args = args_list)
+    )
   }
+
+  res_map <- vector("list", n_methods)
+  names(res_map) <- method_keys
+
+  for (i in seq_len(n_methods)) {
+    worker_res <- parallel:::recvOneResult(cl)
+    m_done <- worker_res$value$m
+    res_map[[m_done]] <- worker_res$value$result
+
+    if (is.function(progress_fn)) {
+      m_name <- if (m_done %in% names(method_meta)) method_meta[[m_done]]$name else m_done
+      progress_fn(i, n_methods, sprintf("Completed %s", m_name))
+    }
+
+    if (submitted < n_methods) {
+      submitted <- submitted + 1
+      parallel:::sendCall(
+        cl[[worker_res$node]],
+        worker_exec,
+        list(m = method_keys[submitted], args = args_list)
+      )
+    }
+  }
+
+  t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+  res <- unname(res_map[method_keys])
   attr(res, "wall_clock_ms") <- t_elapsed
   res
 }
@@ -535,7 +566,22 @@ ui <- fluidPage(
         value = 3.0,
         step = 0.1
       ),
-      uiOutput("n_obs_badge"),
+      tags$div(
+        id = "n_obs_badge",
+        class = "shiny-html-output",
+        style = "margin-top: -10px; margin-bottom: 12px;",
+        tags$div(
+          tags$span(
+            class = "badge bg-light text-dark border",
+            style = "font-size: 0.88rem; padding: 4px 8px; font-weight: 600;",
+            "Selected N = 1,000 (10^3.0)"
+          ),
+          tags$span(
+            style = "margin-left: 6px; font-size: 0.80rem; color: #6c757d;",
+            "(Logarithmic: 10^3.0 = 1,000 to 10^5.0 = 100,000)"
+          )
+        )
+      ),
       fluidRow(
         column(6, sliderInput("p_con", "Num. Continuous Vars.", min = 2, max = 30, value = 10, step = 1)),
         column(6, sliderInput("p_cat", "Num. Categorical Vars.", min = 2, max = 30, value = 10, step = 1))
@@ -611,7 +657,7 @@ ui <- fluidPage(
           tableOutput("benchmark_table"),
           tags$hr(),
           tags$h4("Visual Performance Comparison", style = "font-weight: 600;"),
-          plotOutput("benchmark_plot", height = "380px"),
+          plotOutput("benchmark_plot", height = "420px"),
           tags$hr(),
           tags$h4("Executable R Code Snippets", style = "font-weight: 600;"),
           selectInput(
@@ -649,7 +695,7 @@ ui <- fluidPage(
           tableOutput("selection_table"),
           tags$hr(),
           tags$h4("Selected K Comparison Plot", style = "font-weight: 600;"),
-          plotOutput("selection_plot", height = "360px"),
+          plotOutput("selection_plot", height = "400px"),
           tags$hr(),
           tags$h4("Executable R Code Snippets (Model Selection)", style = "font-weight: 600;"),
           selectInput(
@@ -779,11 +825,18 @@ server <- function(input, output, session) {
   })
 
   output$n_obs_badge <- renderUI({
-    val <- input$log_n
-    n_val <- if (is.null(val)) 1000L else as.integer(round(10^val))
+    val <- if (is.null(input$log_n) || !is.numeric(input$log_n)) 3.0 else input$log_n
+    n_val <- as.integer(round(10^val))
     tags$div(
-      style = "font-size: 0.88rem; color: #2c3e50; margin-top: -10px; margin-bottom: 12px; font-weight: 600;",
-      sprintf("Selected N = %s (10^%.1f)", format(n_val, big.mark = ","), val)
+      tags$span(
+        class = "badge bg-light text-dark border",
+        style = "font-size: 0.88rem; padding: 4px 8px; font-weight: 600;",
+        sprintf("Selected N = %s (10^%.1f)", format(n_val, big.mark = ","), val)
+      ),
+      tags$span(
+        style = "margin-left: 6px; font-size: 0.80rem; color: #6c757d;",
+        "(Logarithmic: 10^3.0 = 1,000 to 10^5.0 = 100,000)"
+      )
     )
   })
 
@@ -1083,7 +1136,7 @@ server <- function(input, output, session) {
     valid_res <- res[!is.na(res$ARI) & res$Method %in% active_methods, , drop = FALSE]
     if (nrow(valid_res) == 0) return(NULL)
 
-    par(mfrow = c(1, 2), mar = c(7.5, 4.5, 3, 1))
+    par(mfrow = c(1, 2), mar = c(10.5, 4.5, 3, 1))
 
     # ARI Plot
     barplot(
@@ -1094,7 +1147,7 @@ server <- function(input, output, session) {
       ylab = "ARI Score",
       ylim = c(0, 1),
       las = 2,
-      cex.names = 0.95
+      cex.names = 0.82
     )
     abline(h = seq(0, 1, 0.2), col = "gray80", lty = 2)
 
@@ -1106,7 +1159,7 @@ server <- function(input, output, session) {
       main = "Execution Time (Lower = Faster)",
       ylab = "Time (ms)",
       las = 2,
-      cex.names = 0.95
+      cex.names = 0.82
     )
     abline(h = axTicks(2), col = "gray80", lty = 2)
   })
@@ -1155,7 +1208,7 @@ server <- function(input, output, session) {
     valid_res <- res[!is.na(res$Predicted_K) & res$Method %in% active_methods, , drop = FALSE]
     if (nrow(valid_res) == 0) return(NULL)
 
-    par(mar = c(7.5, 4.5, 3, 1))
+    par(mar = c(10.5, 4.5, 3, 1))
     barplot(
       valid_res$Predicted_K,
       names.arg = valid_res$Method,
@@ -1164,7 +1217,7 @@ server <- function(input, output, session) {
       ylab = "Predicted K",
       ylim = c(0, 11),
       las = 2,
-      cex.names = 0.95
+      cex.names = 0.85
     )
     abline(h = isolate(input$k_clusters), col = "red", lty = 2, lwd = 2)
     legend("topright", legend = paste("True K =", isolate(input$k_clusters)), col = "red", lty = 2, lwd = 2)
