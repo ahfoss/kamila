@@ -79,10 +79,24 @@ initMeans <- function(conVar, method, numClust) {
 # Setup worker nodes in a cluster with library paths and package namespace
 setupClusterWorkers <- function(cl) {
   lp <- .libPaths()
-  parallel::clusterCall(cl, function(p) {
-    .libPaths(p)
-    library(kamila)
-  }, lp)
+  parallel::clusterCall(cl, function(p) .libPaths(p), lp)
+  pkgPath <- tryCatch(
+    getNamespaceInfo(asNamespace("kamila"), "path"),
+    error = function(e) ""
+  )
+  isDev <- tryCatch(
+    requireNamespace("pkgload", quietly = TRUE) && pkgload::is_dev_package("kamila"),
+    error = function(e) FALSE
+  )
+  parallel::clusterCall(cl, function(is_dev, path) {
+    if (is_dev && nzchar(path)) {
+      # #nocov start
+      pkgload::load_all(path, quiet = TRUE)
+      # #nocov end
+    } else {
+      library(kamila)
+    }
+  }, isDev, pkgPath)
 }
 
 # Execute one prediction strength cross-validation run
@@ -429,7 +443,10 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' @param calcNumClust Character: Method for selecting the number of clusters.
 #' @param numPredStrCvRun Numeric: Number of CV runs for prediction strength method. Ignored unless calcNumClust == 'ps'
 #' @param predStrThresh Numeric: Threshold for prediction strength method. Ignored unless calcNumClust == 'ps'
-#' @param numCores Numeric or cluster: Number of CPU cores to use for parallel execution, or a cluster object created by \code{parallel::makeCluster}. Defaults to 1 (sequential execution). Ignored unless \code{calcNumClust == 'ps'}
+#' @param numCores Numeric or cluster: Number of CPU cores to use for parallel
+#'   execution, or a cluster object created by \code{parallel::makeCluster}.
+#'   Defaults to 1 (sequential execution). Ignored unless
+#'   \code{calcNumClust == 'ps'}.
 #' @return A list with the following results objects:
 #' \item{finalMemb}{A numeric vector with cluster assignment indicated by integer.}
 #' \item{numIter}{}

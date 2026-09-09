@@ -50,7 +50,10 @@ kamila(
 
 \item{predStrThresh}{Numeric: Threshold for prediction strength method. Ignored unless calcNumClust == 'ps'}
 
-\item{numCores}{Numeric or cluster: Number of CPU cores to use for parallel execution, or a cluster object created by \code{parallel::makeCluster}. Defaults to 1 (sequential execution). Ignored unless \code{calcNumClust == 'ps'}}
+\item{numCores}{Numeric or cluster: Number of CPU cores to use for parallel
+execution, or a cluster object created by \code{parallel::makeCluster}.
+Defaults to 1 (sequential execution). Ignored unless
+\code{calcNumClust == 'ps'}.}
 }
 \value{
 A list with the following results objects:
