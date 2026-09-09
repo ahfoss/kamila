@@ -12,6 +12,14 @@ importFrom(KernSmooth,bkde)
 importFrom(Rcpp,sourceCpp)
 importFrom(abind,abind)
 importFrom(gtools,rdirichlet)
+importFrom(parallel,
+  clusterCall,
+  clusterExport,
+  clusterSetRNGStream,
+  makeCluster,
+  parLapply,
+  stopCluster
+)
 importFrom(stats,
   approxfun,
   bw.nrd0,

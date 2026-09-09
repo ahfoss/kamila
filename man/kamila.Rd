@@ -17,7 +17,8 @@ kamila(
   verbose = FALSE,
   calcNumClust = "none",
   numPredStrCvRun = 10,
-  predStrThresh = 0.8
+  predStrThresh = 0.8,
+  numCores = 1
 )
 }
 \arguments{
@@ -48,6 +49,8 @@ kamila(
 \item{numPredStrCvRun}{Numeric: Number of CV runs for prediction strength method. Ignored unless calcNumClust == 'ps'}
 
 \item{predStrThresh}{Numeric: Threshold for prediction strength method. Ignored unless calcNumClust == 'ps'}
+
+\item{numCores}{Numeric or cluster: Number of CPU cores to use for parallel execution, or a cluster object created by \code{parallel::makeCluster}. Defaults to 1 (sequential execution). Ignored unless \code{calcNumClust == 'ps'}}
 }
 \value{
 A list with the following results objects:
