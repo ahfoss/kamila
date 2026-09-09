@@ -140,8 +140,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // interpRadialKde
-NumericVector interpRadialKde(NumericVector y, double maxEval, int pdim, NumericVector evalPoints);
-RcppExport SEXP _kamila_interpRadialKde(SEXP ySEXP, SEXP maxEvalSEXP, SEXP pdimSEXP, SEXP evalPointsSEXP) {
+NumericVector interpRadialKde(NumericVector y, double maxEval, int pdim, NumericVector evalPoints, bool takeLog);
+RcppExport SEXP _kamila_interpRadialKde(SEXP ySEXP, SEXP maxEvalSEXP, SEXP pdimSEXP, SEXP evalPointsSEXP, SEXP takeLogSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -149,7 +149,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type maxEval(maxEvalSEXP);
     Rcpp::traits::input_parameter< int >::type pdim(pdimSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type evalPoints(evalPointsSEXP);
-    rcpp_result_gen = Rcpp::wrap(interpRadialKde(y, maxEval, pdim, evalPoints));
+    Rcpp::traits::input_parameter< bool >::type takeLog(takeLogSEXP);
+    rcpp_result_gen = Rcpp::wrap(interpRadialKde(y, maxEval, pdim, evalPoints, takeLog));
     return rcpp_result_gen;
 END_RCPP
 }

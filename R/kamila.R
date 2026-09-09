@@ -281,7 +281,7 @@ dptmCpp <- function(pts, myMeans, wgts) {
 # pdim is the number of continuous variables used
 # returnFun causes a resampling function to be returned
 #' @importFrom stats bw.nrd0 approxfun quantile
-radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
+radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE, takeLog = FALSE) {
   MAXDENS <- 1
   # Note using a chosen constant for bw reduces time by about 7%
   radialBW <- bw.nrd0(radii)
@@ -299,7 +299,8 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
       y = radKDE$y,
       maxEval = maxEval,
       pdim = pdim,
-      evalPoints = evalPoints
+      evalPoints = evalPoints,
+      takeLog = takeLog
     )
     return(list(kdes = kdes, resampler = NULL))
   }
@@ -341,6 +342,12 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
   resampler <- approxfun(x = radKDE$x, y = densR, rule = 1:2, method = "linear")
   kdes <- resampler(evalPoints)
   kdes <- pmax(kdes, min(densR))
+  if (takeLog) {
+    kdes <- log(kdes)
+  }
+  if (is.matrix(evalPoints)) {
+    dim(kdes) <- dim(evalPoints)
+  }
 
   # return(list(kdes=resampler(evalPoints),resampler=resampler))
   return(list(kdes = kdes, resampler = resampler))
@@ -667,19 +674,13 @@ kamila <- function(
           )
           minDist_i <- rowMin(dist_i)
 
-          logDistRadDens_vec <- log(
-            radialKDE(
-              radii = minDist_i,
-              evalPoints = c(dist_i),
-              pdim = numConVar,
-              returnFun = returnResampler
-            )$kdes
-          )
-          logDistRadDens_i <- matrix(
-            logDistRadDens_vec,
-            nrow = numObs,
-            ncol = numClust
-          )
+          logDistRadDens_i <- radialKDE(
+            radii = minDist_i,
+            evalPoints = dist_i,
+            pdim = numConVar,
+            returnFun = returnResampler,
+            takeLog = TRUE
+          )$kdes
         }
 
         if (hasCat) {
@@ -1207,11 +1208,12 @@ classifyKamila <- function(obj, newData) {
       nn = nrow(newConMat)
     )
 
-    logRadDens <- matrix(
-      log(radialKDE(radii = minDistances, evalPoints = c(newDistances), pdim = ncol(newConMat))$kdes),
-      nrow = nrow(newConMat),
-      ncol = nrow(obj$finalCenters)
-    )
+    logRadDens <- radialKDE(
+      radii = minDistances,
+      evalPoints = newDistances,
+      pdim = ncol(newConMat),
+      takeLog = TRUE
+    )$kdes
   }
 
   if (hasCat) {
