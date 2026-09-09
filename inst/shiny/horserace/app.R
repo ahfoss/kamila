@@ -195,16 +195,19 @@ run_single_fixed_k <- function(m, dat, k) {
       )
       memb <- as.integer(VarSelLCM::fitted(v_fit, type = "partition"))
     } else if (m == "flexmix") {
-      cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
-      con_mat <- as.matrix(dat$conVars)
+      con_cols <- colnames(dat$conVars)
+      cat_cols <- colnames(dat$catVars)
+      con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
+      con_mod <- flexmix::FLXMCmvnorm(con_form, diagonal = TRUE)
+      cat_mods <- lapply(cat_cols, function(col) {
+        flexmix::FLXMRmultinom(stats::as.formula(paste0(col, " ~ 1")))
+      })
       f_fit <- flexmix::flexmix(
-        cbind(con_mat, cat_mat) ~ 1,
+        stats::as.formula(paste0(con_cols[1], " ~ 1")),
+        data = dat$fullData,
         k = k,
-        model = list(
-          flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),
-          flexmix::FLXMCmvbinary(cat_mat ~ 1)
-        ),
-        control = list(iter.max = 30, minprior = 0.05, verbose = 0)
+        model = c(list(con_mod), cat_mods),
+        control = list(iter.max = 25, minprior = 0.05, verbose = 0)
       )
       memb <- as.integer(flexmix::clusters(f_fit))
     }
@@ -335,16 +338,19 @@ run_single_selection <- function(m, dat, true_k) {
         stringsAsFactors = FALSE
       )
     } else if (m == "flexmix") {
-      cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
-      con_mat <- as.matrix(dat$conVars)
+      con_cols <- colnames(dat$conVars)
+      cat_cols <- colnames(dat$catVars)
+      con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
+      con_mod <- flexmix::FLXMCmvnorm(con_form, diagonal = TRUE)
+      cat_mods <- lapply(cat_cols, function(col) {
+        flexmix::FLXMRmultinom(stats::as.formula(paste0(col, " ~ 1")))
+      })
       m_step <- flexmix::stepFlexmix(
-        cbind(con_mat, cat_mat) ~ 1,
+        stats::as.formula(paste0(con_cols[1], " ~ 1")),
+        data = dat$fullData,
         k = k_range,
-        nrep = 2,
-        model = list(
-          flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),
-          flexmix::FLXMCmvbinary(cat_mat ~ 1)
-        ),
+        nrep = 1,
+        model = c(list(con_mod), cat_mods),
         control = list(iter.max = 20, minprior = 0.05, verbose = 0)
       )
       best_m <- flexmix::getModel(m_step, which = "BIC")
@@ -468,13 +474,14 @@ ui <- fluidPage(
       tags$h4("Simulation Settings", style = "font-weight: 600;"),
 
       sliderInput(
-        "n_obs",
-        "Number of Observations (N):",
-        min = 1000,
-        max = 100000,
-        value = 1000,
-        step = 1000
+        "log_n",
+        "Number of Observations log10(N):",
+        min = 3.0,
+        max = 5.0,
+        value = 3.0,
+        step = 0.1
       ),
+      uiOutput("n_obs_badge"),
       fluidRow(
         column(6, sliderInput("p_con", "Num. Continuous Vars.", min = 2, max = 30, value = 10, step = 1)),
         column(6, sliderInput("p_cat", "Num. Categorical Vars.", min = 2, max = 30, value = 10, step = 1))
@@ -692,7 +699,6 @@ server <- function(input, output, session) {
         library(kamila)
         library(cluster)
         if (requireNamespace("clustMixType", quietly = TRUE)) library(clustMixType)
-        if (requireNamespace("clustrd", quietly = TRUE)) library(clustrd)
         if (requireNamespace("VarSelLCM", quietly = TRUE)) library(VarSelLCM)
         if (requireNamespace("flexmix", quietly = TRUE)) library(flexmix)
         if (requireNamespace("mvtnorm", quietly = TRUE)) library(mvtnorm)
@@ -711,13 +717,23 @@ server <- function(input, output, session) {
     }
   })
 
+  output$n_obs_badge <- renderUI({
+    val <- input$log_n
+    n_val <- if (is.null(val)) 1000L else as.integer(round(10^val))
+    tags$div(
+      style = "font-size: 0.88rem; color: #2c3e50; margin-top: -10px; margin-bottom: 12px; font-weight: 600;",
+      sprintf("Selected N = %s (10^%.1f)", format(n_val, big.mark = ","), val)
+    )
+  })
+
   # Dataset Generator
   sim_data <- reactive({
     input$btn_run_fixed
     input$btn_run_select
     isolate({
+      n_calc <- if (!is.null(input$log_n)) as.integer(round(10^input$log_n)) else 1000L
       generate_synthetic_mixed_data(
-        n = input$n_obs,
+        n = n_calc,
         p_con = input$p_con,
         p_cat = input$p_cat,
         k = input$k_clusters,
@@ -902,15 +918,18 @@ server <- function(input, output, session) {
     # FlexMix
     if ("flexmix" %in% selected_methods && has_pkg("flexmix")) {
       f_res <- tryCatch({
-        cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
-        con_mat <- as.matrix(dat$conVars)
+        con_cols <- colnames(dat$conVars)
+        cat_cols <- colnames(dat$catVars)
+        con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
+        con_mod <- flexmix::FLXMCmvnorm(con_form, diagonal = TRUE)
+        cat_mods <- lapply(cat_cols, function(col) {
+          flexmix::FLXMRmultinom(stats::as.formula(paste0(col, " ~ 1")))
+        })
         m <- flexmix::flexmix(
-          cbind(con_mat, cat_mat) ~ 1,
+          stats::as.formula(paste0(con_cols[1], " ~ 1")),
+          data = dat$fullData,
           k = k,
-          model = list(
-            flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),
-            flexmix::FLXMCmvbinary(cat_mat ~ 1)
-          ),
+          model = c(list(con_mod), cat_mods),
           control = list(iter.max = 20, minprior = 0.05, verbose = 0)
         )
         as.integer(flexmix::clusters(m))
@@ -1249,19 +1268,21 @@ server <- function(input, output, session) {
     } else if (m == "flexmix") {
       sprintf(
         paste0(
-          "# --- FlexMix (Joint Gaussian & Multinomial/Bernoulli Mixture) ---\n",
-          "library(flexmix)\n",
-          "library(mvtnorm)\n\n",
-          "cat_mat <- model.matrix(~ . - 1, data = dat$catVars)\n",
-          "con_mat <- as.matrix(dat$conVars)\n\n",
+          "# --- FlexMix (Joint Gaussian & Multinomial Model) ---\n",
+          "library(flexmix)\n\n",
+          "con_cols <- colnames(dat$conVars)\n",
+          "cat_cols <- colnames(dat$catVars)\n",
+          "con_form <- as.formula(paste0(\"cbind(\", paste(con_cols, collapse = \", \"), \") ~ 1\"))\n",
+          "con_mod <- flexmix::FLXMCmvnorm(con_form, diagonal = TRUE)\n",
+          "cat_mods <- lapply(cat_cols, function(col) {\n",
+          "  flexmix::FLXMRmultinom(as.formula(paste0(col, \" ~ 1\")))\n",
+          "})\n",
           "fit <- flexmix::flexmix(\n",
-          "  cbind(con_mat, cat_mat) ~ 1,\n",
+          "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
+          "  data = dat$fullData,\n",
           "  k = %d,\n",
-          "  model = list(\n",
-          "    flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),\n",
-          "    flexmix::FLXMCmvbinary(cat_mat ~ 1)\n",
-          "  ),\n",
-          "  control = list(iter.max = 30, minprior = 0.05, verbose = 0)\n",
+          "  model = c(list(con_mod), cat_mods),\n",
+          "  control = list(iter.max = 25, minprior = 0.05, verbose = 0)\n",
           ")\n",
           "clusters <- flexmix::clusters(fit)\n"
         ),
@@ -1343,19 +1364,21 @@ server <- function(input, output, session) {
     } else if (m == "flexmix") {
       sprintf(
         paste0(
-          "# --- FlexMix (stepFlexmix BIC Selection) ---\n",
-          "library(flexmix)\n",
-          "library(mvtnorm)\n\n",
-          "cat_mat <- model.matrix(~ . - 1, data = dat$catVars)\n",
-          "con_mat <- as.matrix(dat$conVars)\n\n",
+          "# --- FlexMix (stepFlexmix BIC Multinomial Selection) ---\n",
+          "library(flexmix)\n\n",
+          "con_cols <- colnames(dat$conVars)\n",
+          "cat_cols <- colnames(dat$catVars)\n",
+          "con_form <- as.formula(paste0(\"cbind(\", paste(con_cols, collapse = \", \"), \") ~ 1\"))\n",
+          "con_mod <- flexmix::FLXMCmvnorm(con_form, diagonal = TRUE)\n",
+          "cat_mods <- lapply(cat_cols, function(col) {\n",
+          "  flexmix::FLXMRmultinom(as.formula(paste0(col, \" ~ 1\")))\n",
+          "})\n",
           "m_step <- flexmix::stepFlexmix(\n",
-          "  cbind(con_mat, cat_mat) ~ 1,\n",
+          "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
+          "  data = dat$fullData,\n",
           "  k = %s,\n",
-          "  nrep = 2,\n",
-          "  model = list(\n",
-          "    flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),\n",
-          "    flexmix::FLXMCmvbinary(cat_mat ~ 1)\n",
-          "  ),\n",
+          "  nrep = 1,\n",
+          "  model = c(list(con_mod), cat_mods),\n",
           "  control = list(iter.max = 20, minprior = 0.05, verbose = 0)\n",
           ")\n",
           "best_model <- flexmix::getModel(m_step, which = \"BIC\")\n",
