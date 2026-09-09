@@ -19,23 +19,41 @@ NumericMatrix dptm(
  ,int nn
 )
 {
-  NumericMatrix outMat(nn,kkMean);
+  NumericMatrix outMat(nn, kkMean);
   const double* p_pts = pts.begin();
   const double* p_means = myMeans.begin();
   const double* p_wgts = wgts.begin();
   double* p_out = outMat.begin();
 
-  for (int j=0; j<kkMean; j++){
-    for (int i=0; i<nn; i++){
-      double distij2 = 0.0;
-      for (int p=0; p<ppDim; p++){
-        double diff = p_wgts[p] * (p_pts[i + p * nn] - p_means[j + p * kkMean]);
-        distij2 += diff * diff;
+  for (int j = 0; j < kkMean; ++j) {
+    double* out_col = p_out + j * nn;
+    std::fill(out_col, out_col + nn, 0.0);
+
+    for (int p = 0; p < ppDim; ++p) {
+      double w = p_wgts[p];
+      if (w == 0.0) continue;
+      double m = p_means[j + p * kkMean];
+      const double* pts_col = p_pts + p * nn;
+
+      if (w == 1.0) {
+        for (int i = 0; i < nn; ++i) {
+          double diff = pts_col[i] - m;
+          out_col[i] += diff * diff;
+        }
+      } else {
+        for (int i = 0; i < nn; ++i) {
+          double diff = w * (pts_col[i] - m);
+          out_col[i] += diff * diff;
+        }
       }
-      p_out[i + j * nn] = std::sqrt(distij2);
+    }
+
+    for (int i = 0; i < nn; ++i) {
+      out_col[i] = std::sqrt(out_col[i]);
     }
   }
-  return(outMat);
+
+  return outMat;
 }
 
 // [[Rcpp::export]]
@@ -211,28 +229,72 @@ NumericMatrix calcCatLogLiks(
   double* p_out = outMat.begin();
   const int* p_cat = catFactorNum.begin();
 
-  std::vector<const double*> p_logProbs(qq);
-  for (int q = 0; q < qq; ++q) {
-    NumericMatrix mat = logProbsCond_i[q];
-    p_logProbs[q] = mat.begin();
-  }
-
+  // Pre-calculate weighted lookups for each q: table of size [nlev * kk]
+  std::vector<std::vector<double>> weightedTabs(qq);
   for (int q = 0; q < qq; ++q) {
     double w = catWeights[q];
-    if (w == 0.0) continue;
-    const int* q_col = p_cat + q * nn;
-    const double* lp = p_logProbs[q];
-
-    for (int cl = 0; cl < kk; ++cl) {
-      double* out_col = p_out + cl * nn;
-      for (int i = 0; i < nn; ++i) {
-        int lev = q_col[i] - 1;
-        out_col[i] += w * lp[cl + lev * kk];
+    NumericMatrix mat = logProbsCond_i[q];
+    int nlev = mat.ncol();
+    weightedTabs[q].resize(kk * nlev);
+    const double* lp = mat.begin();
+    for (int lev = 0; lev < nlev; ++lev) {
+      for (int cl = 0; cl < kk; ++cl) {
+        weightedTabs[q][lev * kk + cl] = w * lp[cl + lev * kk];
       }
     }
   }
 
-  return(outMat);
+  std::vector<double*> out_cols(kk);
+  for (int cl = 0; cl < kk; ++cl) {
+    out_cols[cl] = p_out + cl * nn;
+  }
+
+  for (int q = 0; q < qq; ++q) {
+    if (catWeights[q] == 0.0) continue;
+    const int* q_col = p_cat + q * nn;
+    const double* w_tab = weightedTabs[q].data();
+
+    if (kk == 4) {
+      double* c0 = out_cols[0];
+      double* c1 = out_cols[1];
+      double* c2 = out_cols[2];
+      double* c3 = out_cols[3];
+      for (int i = 0; i < nn; ++i) {
+        const double* w_row = w_tab + (q_col[i] - 1) * 4;
+        c0[i] += w_row[0];
+        c1[i] += w_row[1];
+        c2[i] += w_row[2];
+        c3[i] += w_row[3];
+      }
+    } else if (kk == 2) {
+      double* c0 = out_cols[0];
+      double* c1 = out_cols[1];
+      for (int i = 0; i < nn; ++i) {
+        const double* w_row = w_tab + (q_col[i] - 1) * 2;
+        c0[i] += w_row[0];
+        c1[i] += w_row[1];
+      }
+    } else if (kk == 3) {
+      double* c0 = out_cols[0];
+      double* c1 = out_cols[1];
+      double* c2 = out_cols[2];
+      for (int i = 0; i < nn; ++i) {
+        const double* w_row = w_tab + (q_col[i] - 1) * 3;
+        c0[i] += w_row[0];
+        c1[i] += w_row[1];
+        c2[i] += w_row[2];
+      }
+    } else {
+      for (int i = 0; i < nn; ++i) {
+        const double* w_row = w_tab + (q_col[i] - 1) * kk;
+        for (int cl = 0; cl < kk; ++cl) {
+          out_cols[cl][i] += w_row[cl];
+        }
+      }
+    }
+  }
+
+  return outMat;
 }
 
 // [[Rcpp::export]]
@@ -491,7 +553,8 @@ NumericVector interpRadialKde(
   NumericVector y,
   double maxEval,
   int pdim,
-  NumericVector evalPoints
+  NumericVector evalPoints,
+  bool takeLog = false
 )
 {
   int m = 401;
@@ -542,6 +605,11 @@ NumericVector interpRadialKde(
     if (densR[i] < minDensR) minDensR = densR[i];
   }
 
+  std::vector<double> diffDensR(m - 1);
+  for (int i = 0; i < m - 1; ++i) {
+    diffDensR[i] = densR[i + 1] - densR[i];
+  }
+
   // 6. linear interpolation at evalPoints with rule 1:2 and pmax(..., min(densR))
   int nEval = evalPoints.size();
   NumericVector kdes(nEval);
@@ -549,20 +617,46 @@ NumericVector interpRadialKde(
   double* p_kdes = kdes.begin();
 
   double inv_h = (h > 0.0) ? (1.0 / h) : 0.0;
-  for (int i = 0; i < nEval; ++i) {
-    double u = p_eval[i];
-    if (u <= 0.0) {
-      p_kdes[i] = (densR[0] > minDensR) ? densR[0] : minDensR;
-    } else if (u >= maxEval) {
-      p_kdes[i] = (densR[m - 1] > minDensR) ? densR[m - 1] : minDensR;
-    } else {
-      double pos = u * inv_h;
-      int idx = static_cast<int>(pos);
-      if (idx >= m - 1) idx = m - 2;
-      double frac = pos - idx;
-      double val = (1.0 - frac) * densR[idx] + frac * densR[idx + 1];
-      p_kdes[i] = (val > minDensR) ? val : minDensR;
+  if (takeLog) {
+    double logVal0 = std::log((densR[0] > minDensR) ? densR[0] : minDensR);
+    double logValMax = std::log((densR[m - 1] > minDensR) ? densR[m - 1] : minDensR);
+    for (int i = 0; i < nEval; ++i) {
+      double u = p_eval[i];
+      if (u <= 0.0) {
+        p_kdes[i] = logVal0;
+      } else if (u >= maxEval) {
+        p_kdes[i] = logValMax;
+      } else {
+        double pos = u * inv_h;
+        int idx = static_cast<int>(pos);
+        if (idx >= m - 1) idx = m - 2;
+        double frac = pos - idx;
+        double val = densR[idx] + frac * diffDensR[idx];
+        p_kdes[i] = std::log((val > minDensR) ? val : minDensR);
+      }
     }
+  } else {
+    double val0 = (densR[0] > minDensR) ? densR[0] : minDensR;
+    double valMax = (densR[m - 1] > minDensR) ? densR[m - 1] : minDensR;
+    for (int i = 0; i < nEval; ++i) {
+      double u = p_eval[i];
+      if (u <= 0.0) {
+        p_kdes[i] = val0;
+      } else if (u >= maxEval) {
+        p_kdes[i] = valMax;
+      } else {
+        double pos = u * inv_h;
+        int idx = static_cast<int>(pos);
+        if (idx >= m - 1) idx = m - 2;
+        double frac = pos - idx;
+        double val = densR[idx] + frac * diffDensR[idx];
+        p_kdes[i] = (val > minDensR) ? val : minDensR;
+      }
+    }
+  }
+
+  if (evalPoints.hasAttribute("dim")) {
+    kdes.attr("dim") = evalPoints.attr("dim");
   }
 
   return kdes;

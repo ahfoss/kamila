@@ -41,8 +41,8 @@ updateLogProbs <- function(catFactorNum, membNew, numLev, catBw, kk) {
     .Call('_kamila_updateLogProbs', PACKAGE = 'kamila', catFactorNum, membNew, numLev, catBw, kk)
 }
 
-interpRadialKde <- function(y, maxEval, pdim, evalPoints) {
-    .Call('_kamila_interpRadialKde', PACKAGE = 'kamila', y, maxEval, pdim, evalPoints)
+interpRadialKde <- function(y, maxEval, pdim, evalPoints, takeLog = FALSE) {
+    .Call('_kamila_interpRadialKde', PACKAGE = 'kamila', y, maxEval, pdim, evalPoints, takeLog)
 }
 
 calcPsCpp <- function(testMemb, teIntoTr, numClust) {
