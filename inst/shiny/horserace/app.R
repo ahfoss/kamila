@@ -535,7 +535,23 @@ ui <- fluidPage(
           tableOutput("benchmark_table"),
           tags$hr(),
           tags$h4("Visual Performance Comparison", style = "font-weight: 600;"),
-          plotOutput("benchmark_plot", height = "380px")
+          plotOutput("benchmark_plot", height = "380px"),
+          tags$hr(),
+          tags$h4("Executable R Code Snippets", style = "font-weight: 600;"),
+          selectInput(
+            "code_method_fixed",
+            "Select Technique for R Code:",
+            choices = c(
+              "KAMILA (kamila)" = "kamila",
+              "Gower + PAM (cluster)" = "gower_pam",
+              "K-Prototypes (clustMixType)" = "kproto",
+              "ClusPCAMix (clustrd)" = "cluspcamix",
+              "VarSelLCM (VarSelLCM)" = "varsellcm",
+              "FlexMix (flexmix)" = "flexmix"
+            ),
+            selected = "kamila"
+          ),
+          verbatimTextOutput("code_fixed_out")
         ),
 
         tabPanel(
@@ -556,7 +572,23 @@ ui <- fluidPage(
           tableOutput("selection_table"),
           tags$hr(),
           tags$h4("Selected K Comparison Plot", style = "font-weight: 600;"),
-          plotOutput("selection_plot", height = "360px")
+          plotOutput("selection_plot", height = "360px"),
+          tags$hr(),
+          tags$h4("Executable R Code Snippets (Model Selection)", style = "font-weight: 600;"),
+          selectInput(
+            "code_method_sel",
+            "Select Technique for Model Selection Code:",
+            choices = c(
+              "KAMILA (kamila)" = "kamila",
+              "Gower + PAM (cluster)" = "gower_pam",
+              "K-Prototypes (clustMixType)" = "kproto",
+              "ClusPCAMix (clustrd)" = "cluspcamix",
+              "VarSelLCM (VarSelLCM)" = "varsellcm",
+              "FlexMix (flexmix)" = "flexmix"
+            ),
+            selected = "kamila"
+          ),
+          verbatimTextOutput("code_sel_out")
         ),
 
         tabPanel(
@@ -602,7 +634,10 @@ ui <- fluidPage(
               )
             )
           ),
-          plotOutput("lda_cluster_plot", height = "600px")
+          plotOutput("lda_cluster_plot", height = "600px"),
+          tags$hr(),
+          tags$h4("Executable R Code Snippet (Clustering & LDA Projection)", style = "font-weight: 600;"),
+          verbatimTextOutput("code_lda_out")
         ),
 
         tabPanel(
@@ -998,6 +1033,225 @@ server <- function(input, output, session) {
         grid()
       }
     }
+  })
+
+  # ----------------------------------------------------------------------------
+  # Executable Code Snippets
+  # ----------------------------------------------------------------------------
+  output$code_fixed_out <- renderText({
+    m <- input$code_method_fixed
+    k <- isolate(input$k_clusters)
+    if (is.null(m) || m == "kamila") {
+      sprintf(
+        paste0(
+          "# --- KAMILA Clustering ---\n",
+          "library(kamila)\n\n",
+          "# dat$conVars: continuous variables (data.frame)\n",
+          "# dat$catVars: categorical variables (data.frame of factors)\n",
+          "fit <- kamila::kamila(\n",
+          "  conVar = dat$conVars,\n",
+          "  catFactor = dat$catVars,\n",
+          "  numClust = %d,\n",
+          "  numInit = 5,\n",
+          "  maxIter = 25,\n",
+          "  calcNumClust = \"none\"\n",
+          ")\n",
+          "clusters <- fit$finalMemb\n"
+        ),
+        k
+      )
+    } else if (m == "gower_pam") {
+      sprintf(
+        paste0(
+          "# --- Gower Distance + PAM (Partitioning Around Medoids) ---\n",
+          "library(cluster)\n\n",
+          "# dat$fullData: mixed-type dataset\n",
+          "g_dist <- cluster::daisy(dat$fullData, metric = \"gower\")\n",
+          "fit <- cluster::pam(g_dist, k = %d, diss = TRUE)\n",
+          "clusters <- fit$clustering\n"
+        ),
+        k
+      )
+    } else if (m == "kproto") {
+      sprintf(
+        paste0(
+          "# --- K-Prototypes for Mixed-Type Data ---\n",
+          "library(clustMixType)\n\n",
+          "fit <- clustMixType::kproto(\n",
+          "  x = dat$fullData,\n",
+          "  k = %d,\n",
+          "  nstart = 3,\n",
+          "  verbose = FALSE\n",
+          ")\n",
+          "clusters <- fit$cluster\n"
+        ),
+        k
+      )
+    } else if (m == "cluspcamix") {
+      sprintf(
+        paste0(
+          "# --- ClusPCAMix (Factorial Clustering of Mixed Data) ---\n",
+          "library(clustrd)\n\n",
+          "fit <- clustrd::cluspcamix(\n",
+          "  data = dat$fullData,\n",
+          "  nclus = %d,\n",
+          "  ndim = 2,\n",
+          "  nstart = 3\n",
+          ")\n",
+          "clusters <- fit$cluster\n"
+        ),
+        k
+      )
+    } else if (m == "varsellcm") {
+      sprintf(
+        paste0(
+          "# --- VarSelLCM (Latent Class Model with Variable Selection) ---\n",
+          "library(VarSelLCM)\n\n",
+          "fit <- VarSelLCM::VarSelCluster(\n",
+          "  x = dat$fullData,\n",
+          "  gvals = %d,\n",
+          "  vbleSelec = FALSE,\n",
+          "  crit.varsel = \"BIC\",\n",
+          "  nbcores = 1\n",
+          ")\n",
+          "clusters <- VarSelLCM::fitted(fit, type = \"partition\")\n"
+        ),
+        k
+      )
+    } else if (m == "flexmix") {
+      sprintf(
+        paste0(
+          "# --- FlexMix (Joint Gaussian & Multinomial/Bernoulli Mixture) ---\n",
+          "library(flexmix)\n",
+          "library(mvtnorm)\n\n",
+          "cat_mat <- model.matrix(~ . - 1, data = dat$catVars)\n",
+          "con_mat <- as.matrix(dat$conVars)\n\n",
+          "fit <- flexmix::flexmix(\n",
+          "  cbind(con_mat, cat_mat) ~ 1,\n",
+          "  k = %d,\n",
+          "  model = list(\n",
+          "    flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),\n",
+          "    flexmix::FLXMCmvbinary(cat_mat ~ 1)\n",
+          "  ),\n",
+          "  control = list(iter.max = 30, minprior = 0.05, verbose = 0)\n",
+          ")\n",
+          "clusters <- flexmix::clusters(fit)\n"
+        ),
+        k
+      )
+    }
+  })
+
+  output$code_sel_out <- renderText({
+    m <- input$code_method_sel
+    if (is.null(m) || m == "kamila") {
+      paste0(
+        "# --- KAMILA Cluster Count Selection (Prediction Strength) ---\n",
+        "library(kamila)\n\n",
+        "fit <- kamila::kamila(\n",
+        "  conVar = dat$conVars,\n",
+        "  catFactor = dat$catVars,\n",
+        "  numClust = 2:5,\n",
+        "  numInit = 3,\n",
+        "  calcNumClust = \"ps\",\n",
+        "  numPredStrCvRun = 5,\n",
+        "  predStrThresh = 0.6\n",
+        ")\n",
+        "best_k <- fit$nClust$bestNClust\n"
+      )
+    } else if (m == "gower_pam") {
+      paste0(
+        "# --- Gower + PAM (Average Silhouette Width Selection) ---\n",
+        "library(cluster)\n\n",
+        "g_dist <- cluster::daisy(dat$fullData, metric = \"gower\")\n",
+        "sils <- sapply(2:5, function(ki) {\n",
+        "  cluster::pam(g_dist, k = ki, diss = TRUE)$silinfo$avg.width\n",
+        "})\n",
+        "best_k <- (2:5)[which.max(sils)]\n"
+      )
+    } else if (m == "kproto") {
+      paste0(
+        "# --- K-Prototypes Validation Index (Silhouette Selection) ---\n",
+        "library(clustMixType)\n\n",
+        "val <- clustMixType::validation_kproto(\n",
+        "  method = \"silhouette\",\n",
+        "  data = dat$fullData,\n",
+        "  k = 2:5,\n",
+        "  nstart = 2,\n",
+        "  verbose = FALSE\n",
+        ")\n",
+        "best_k <- val$k_opt\n"
+      )
+    } else if (m == "cluspcamix") {
+      paste0(
+        "# --- ClusPCAMix (Objective Function Maximization) ---\n",
+        "library(clustrd)\n\n",
+        "fits <- lapply(2:5, function(ki) {\n",
+        "  clustrd::cluspcamix(data = dat$fullData, nclus = ki, ndim = 2, nstart = 2)\n",
+        "})\n",
+        "objs <- sapply(fits, function(f) f$criterion)\n",
+        "best_k <- (2:5)[which.max(objs)]\n"
+      )
+    } else if (m == "varsellcm") {
+      paste0(
+        "# --- VarSelLCM (BIC / MICL Information Criterion Selection) ---\n",
+        "library(VarSelLCM)\n\n",
+        "fit <- VarSelLCM::VarSelCluster(\n",
+        "  x = dat$fullData,\n",
+        "  gvals = 2:5,\n",
+        "  vbleSelec = FALSE,\n",
+        "  crit.varsel = \"BIC\",\n",
+        "  nbcores = 1\n",
+        ")\n",
+        "best_k <- fit@model@g\n"
+      )
+    } else if (m == "flexmix") {
+      paste0(
+        "# --- FlexMix (stepFlexmix BIC Selection) ---\n",
+        "library(flexmix)\n",
+        "library(mvtnorm)\n\n",
+        "cat_mat <- model.matrix(~ . - 1, data = dat$catVars)\n",
+        "con_mat <- as.matrix(dat$conVars)\n\n",
+        "m_step <- flexmix::stepFlexmix(\n",
+        "  cbind(con_mat, cat_mat) ~ 1,\n",
+        "  k = 2:5,\n",
+        "  nrep = 2,\n",
+        "  model = list(\n",
+        "    flexmix::FLXMCmvnorm(con_mat ~ 1, diagonal = TRUE),\n",
+        "    flexmix::FLXMCmvbinary(cat_mat ~ 1)\n",
+        "  ),\n",
+        "  control = list(iter.max = 20, minprior = 0.05, verbose = 0)\n",
+        ")\n",
+        "best_model <- flexmix::getModel(m_step, which = \"BIC\")\n",
+        "best_k <- best_model@k\n"
+      )
+    }
+  })
+
+  output$code_lda_out <- renderText({
+    paste0(
+      "# --- 1. Compute Ground-Truth Linear Discriminant Analysis (LDA) ---\n",
+      "library(MASS)\n\n",
+      "# Standardize continuous features and dummy-coded factors\n",
+      "cat_mat <- model.matrix(~ ., data = dat$catVars)[, -1, drop = FALSE]\n",
+      "comb_mat <- cbind(scale(as.matrix(dat$conVars)), scale(cat_mat))\n",
+      "df_lda <- as.data.frame(comb_mat)\n",
+      "df_lda$class <- as.factor(dat$trueID)\n\n",
+      "# Fit LDA model on true cluster classes\n",
+      "lda_fit <- MASS::lda(class ~ ., data = df_lda, tol = 1e-4)\n",
+      "lda_coords <- predict(lda_fit, newdata = df_lda)$x\n\n",
+      "# --- 2. Project Points Colored by Predicted Cluster Partitions ---\n",
+      "palette <- c(\"#e74c3c\", \"#3498db\", \"#2ecc71\", \"#f39c12\", \"#9b59b6\", \"#1abc9c\")\n",
+      "plot(\n",
+      "  lda_coords[, 1], lda_coords[, 2],\n",
+      "  col = palette[clusters],\n",
+      "  pch = 19,\n",
+      "  xlab = \"Linear Discriminant 1 (LD1)\",\n",
+      "  ylab = \"Linear Discriminant 2 (LD2)\",\n",
+      "  main = \"LDA Discriminant Subspace Projection\"\n",
+      ")\n",
+      "grid()\n"
+    )
   })
 
   # Environment Information
