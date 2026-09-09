@@ -147,7 +147,8 @@ method_meta <- list(
   gower_pam = list(name = "Gower + PAM", pkg = "cluster"),
   kproto = list(name = "K-Prototypes", pkg = "clustMixType"),
   varsellcm = list(name = "VarSelLCM", pkg = "VarSelLCM"),
-  flexmix = list(name = "FlexMix", pkg = "flexmix")
+  flexmix_multinom = list(name = "FlexMix (Multinomial)", pkg = "flexmix"),
+  flexmix_binary = list(name = "FlexMix (Binary Levels)", pkg = "flexmix")
 )
 
 detected_cores_count <- tryCatch({
@@ -194,7 +195,7 @@ run_single_fixed_k <- function(m, dat, k) {
         x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
       )
       memb <- as.integer(VarSelLCM::fitted(v_fit, type = "partition"))
-    } else if (m == "flexmix") {
+    } else if (m == "flexmix_multinom") {
       con_cols <- colnames(dat$conVars)
       cat_cols <- colnames(dat$catVars)
       con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
@@ -207,6 +208,25 @@ run_single_fixed_k <- function(m, dat, k) {
         data = dat$fullData,
         k = k,
         model = c(list(con_mod), cat_mods),
+        control = list(iter.max = 25, minprior = 0.05, verbose = 0)
+      )
+      memb <- as.integer(flexmix::clusters(f_fit))
+    } else if (m == "flexmix_binary") {
+      con_mat <- safe_scale(dat$conVars)
+      cat_dummy <- stats::model.matrix(~ . - 1, data = dat$catVars)
+      df_comb <- as.data.frame(cbind(con_mat, cat_dummy))
+      con_cols <- colnames(con_mat)
+      bin_cols <- colnames(cat_dummy)
+      con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
+      bin_form <- stats::as.formula(paste0("cbind(", paste(bin_cols, collapse = ", "), ") ~ 1"))
+      f_fit <- flexmix::flexmix(
+        stats::as.formula(paste0(con_cols[1], " ~ 1")),
+        data = df_comb,
+        k = k,
+        model = list(
+          flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
+          flexmix::FLXMCmvbinary(bin_form)
+        ),
         control = list(iter.max = 25, minprior = 0.05, verbose = 0)
       )
       memb <- as.integer(flexmix::clusters(f_fit))
@@ -238,7 +258,7 @@ run_single_fixed_k <- function(m, dat, k) {
   })
 }
 
-run_single_selection <- function(m, dat, true_k) {
+run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
   m_info <- method_meta[[m]]
   m_name <- m_info$name
   m_pkg <- m_info$pkg
@@ -251,6 +271,7 @@ run_single_selection <- function(m, dat, true_k) {
   t_start <- proc.time()
   tryCatch({
     if (m == "kamila") {
+      num_cores_ps <- if (!is.null(ps_cores) && ps_cores > 1) as.integer(ps_cores) else 1
       res_k <- kamila::kamila(
         dat$conVars,
         dat$catVars,
@@ -258,7 +279,8 @@ run_single_selection <- function(m, dat, true_k) {
         numInit = 3,
         calcNumClust = "ps",
         numPredStrCvRun = 5,
-        predStrThresh = 0.6
+        predStrThresh = 0.6,
+        numCores = num_cores_ps
       )
       t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
       pred_k <- if (is.list(res_k$nClust)) res_k$nClust$bestNClust else res_k$nClust
@@ -337,7 +359,7 @@ run_single_selection <- function(m, dat, true_k) {
         Time_ms = round(t_elapsed, 1),
         stringsAsFactors = FALSE
       )
-    } else if (m == "flexmix") {
+    } else if (m == "flexmix_multinom") {
       con_cols <- colnames(dat$conVars)
       cat_cols <- colnames(dat$catVars)
       con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
@@ -361,7 +383,39 @@ run_single_selection <- function(m, dat, true_k) {
         Package = m_pkg,
         True_K = true_k,
         Predicted_K = best_m@k,
-        Criterion = "BIC",
+        Criterion = "BIC (Multinomial)",
+        ARI = round(ari, 4),
+        Time_ms = round(t_elapsed, 1),
+        stringsAsFactors = FALSE
+      )
+    } else if (m == "flexmix_binary") {
+      con_mat <- safe_scale(dat$conVars)
+      cat_dummy <- stats::model.matrix(~ . - 1, data = dat$catVars)
+      df_comb <- as.data.frame(cbind(con_mat, cat_dummy))
+      con_cols <- colnames(con_mat)
+      bin_cols <- colnames(cat_dummy)
+      con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
+      bin_form <- stats::as.formula(paste0("cbind(", paste(bin_cols, collapse = ", "), ") ~ 1"))
+      m_step <- flexmix::stepFlexmix(
+        stats::as.formula(paste0(con_cols[1], " ~ 1")),
+        data = df_comb,
+        k = k_range,
+        nrep = 1,
+        model = list(
+          flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
+          flexmix::FLXMCmvbinary(bin_form)
+        ),
+        control = list(iter.max = 20, minprior = 0.05, verbose = 0)
+      )
+      best_m <- flexmix::getModel(m_step, which = "BIC")
+      t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+      ari <- calc_ari(dat$trueID, as.integer(flexmix::clusters(best_m)))
+      data.frame(
+        Method = m_name,
+        Package = m_pkg,
+        True_K = true_k,
+        Predicted_K = best_m@k,
+        Criterion = "BIC (Binary Levels)",
         ARI = round(ari, 4),
         Time_ms = round(t_elapsed, 1),
         stringsAsFactors = FALSE
@@ -505,9 +559,13 @@ ui <- fluidPage(
           "Gower's Dist + PAM (cluster)" = "gower_pam",
           "K-Prototypes (clustMixType)" = "kproto",
           "VarSelLCM (VarSelLCM)" = "varsellcm",
-          "FlexMix / Latent Class (flexmix)" = "flexmix"
+          "FlexMix Multinomial (flexmix)" = "flexmix_multinom",
+          "FlexMix Binary Levels (flexmix)" = "flexmix_binary"
         ),
-        selected = c("kamila", "gower_pam", "kproto", "varsellcm", "flexmix")
+        selected = c(
+          "kamila", "gower_pam", "kproto", "varsellcm",
+          "flexmix_multinom", "flexmix_binary"
+        )
       ),
 
       tags$hr(),
@@ -564,7 +622,8 @@ ui <- fluidPage(
               "Gower + PAM (cluster)" = "gower_pam",
               "K-Prototypes (clustMixType)" = "kproto",
               "VarSelLCM (VarSelLCM)" = "varsellcm",
-              "FlexMix (flexmix)" = "flexmix"
+              "FlexMix (Multinomial)" = "flexmix_multinom",
+              "FlexMix (Binary Levels)" = "flexmix_binary"
             ),
             selected = "kamila"
           ),
@@ -601,7 +660,8 @@ ui <- fluidPage(
               "Gower + PAM (cluster)" = "gower_pam",
               "K-Prototypes (clustMixType)" = "kproto",
               "VarSelLCM (VarSelLCM)" = "varsellcm",
-              "FlexMix (flexmix)" = "flexmix"
+              "FlexMix (Multinomial)" = "flexmix_multinom",
+              "FlexMix (Binary Levels)" = "flexmix_binary"
             ),
             selected = "kamila"
           ),
@@ -643,7 +703,8 @@ ui <- fluidPage(
                     "Gower + PAM (cluster)" = "gower_pam",
                     "K-Prototypes (clustMixType)" = "kproto",
                     "VarSelLCM (VarSelLCM)" = "varsellcm",
-                    "FlexMix (flexmix)" = "flexmix"
+                    "FlexMix (Multinomial)" = "flexmix_multinom",
+                    "FlexMix (Binary Levels)" = "flexmix_binary"
                   ),
                   selected = "kamila"
                 )
@@ -843,6 +904,7 @@ server <- function(input, output, session) {
             detail = sprintf("[%d/%d] %s", cur_idx, total_count, item_desc)
           )
         }
+        ps_cores_arg <- if (use_par && length(valid_methods) == 1) n_cores else 1
         run_parallel_jobs(
           method_keys = valid_methods,
           runner_fn = run_single_selection,
@@ -851,7 +913,8 @@ server <- function(input, output, session) {
           cluster_obj = worker_cl,
           progress_fn = progress_cb,
           dat = dat,
-          true_k = true_k
+          true_k = true_k,
+          ps_cores = ps_cores_arg
         )
       }
     )
@@ -915,8 +978,8 @@ server <- function(input, output, session) {
       if (!is.null(v_res)) membs$varsellcm <- v_res
     }
 
-    # FlexMix
-    if ("flexmix" %in% selected_methods && has_pkg("flexmix")) {
+    # FlexMix Multinomial
+    if ("flexmix_multinom" %in% selected_methods && has_pkg("flexmix")) {
       f_res <- tryCatch({
         con_cols <- colnames(dat$conVars)
         cat_cols <- colnames(dat$catVars)
@@ -934,7 +997,32 @@ server <- function(input, output, session) {
         )
         as.integer(flexmix::clusters(m))
       }, error = function(e) NULL)
-      if (!is.null(f_res)) membs$flexmix <- f_res
+      if (!is.null(f_res)) membs$flexmix_multinom <- f_res
+    }
+
+    # FlexMix Binary Levels
+    if ("flexmix_binary" %in% selected_methods && has_pkg("flexmix")) {
+      fb_res <- tryCatch({
+        con_mat <- safe_scale(dat$conVars)
+        cat_dummy <- stats::model.matrix(~ . - 1, data = dat$catVars)
+        df_comb <- as.data.frame(cbind(con_mat, cat_dummy))
+        con_cols <- colnames(con_mat)
+        bin_cols <- colnames(cat_dummy)
+        con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
+        bin_form <- stats::as.formula(paste0("cbind(", paste(bin_cols, collapse = ", "), ") ~ 1"))
+        m <- flexmix::flexmix(
+          stats::as.formula(paste0(con_cols[1], " ~ 1")),
+          data = df_comb,
+          k = k,
+          model = list(
+            flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
+            flexmix::FLXMCmvbinary(bin_form)
+          ),
+          control = list(iter.max = 20, minprior = 0.05, verbose = 0)
+        )
+        as.integer(flexmix::clusters(m))
+      }, error = function(e) NULL)
+      if (!is.null(fb_res)) membs$flexmix_binary <- fb_res
     }
 
     membs
@@ -946,7 +1034,8 @@ server <- function(input, output, session) {
     gower_pam = "Gower + PAM",
     kproto = "K-Prototypes",
     varsellcm = "VarSelLCM",
-    flexmix = "FlexMix"
+    flexmix_multinom = "FlexMix (Multinomial)",
+    flexmix_binary = "FlexMix (Binary Levels)"
   )
 
   # Render Tables & Plots
@@ -1137,7 +1226,8 @@ server <- function(input, output, session) {
       gower_pam = "Gower + PAM (cluster)",
       kproto = "K-Prototypes (clustMixType)",
       varsellcm = "VarSelLCM",
-      flexmix = "FlexMix"
+      flexmix_multinom = "FlexMix (Multinomial)",
+      flexmix_binary = "FlexMix (Binary Levels)"
     )
 
     sub_note <- if (n_total > sample_size) sprintf(" (Subsample N = %d of %d)", sample_size, n_total) else ""
@@ -1265,7 +1355,7 @@ server <- function(input, output, session) {
         ),
         k
       )
-    } else if (m == "flexmix") {
+    } else if (m == "flexmix_multinom") {
       sprintf(
         paste0(
           "# --- FlexMix (Joint Gaussian & Multinomial Model) ---\n",
@@ -1288,6 +1378,32 @@ server <- function(input, output, session) {
         ),
         k
       )
+    } else if (m == "flexmix_binary") {
+      sprintf(
+        paste0(
+          "# --- FlexMix (Joint Gaussian & Binary Level Indicators) ---\n",
+          "library(flexmix)\n\n",
+          "con_mat <- scale(as.matrix(dat$conVars))\n",
+          "cat_dummy <- model.matrix(~ . - 1, data = dat$catVars)\n",
+          "df_comb <- as.data.frame(cbind(con_mat, cat_dummy))\n",
+          "con_cols <- colnames(con_mat)\n",
+          "bin_cols <- colnames(cat_dummy)\n",
+          "con_form <- as.formula(paste0(\"cbind(\", paste(con_cols, collapse = \", \"), \") ~ 1\"))\n",
+          "bin_form <- as.formula(paste0(\"cbind(\", paste(bin_cols, collapse = \", \"), \") ~ 1\"))\n",
+          "fit <- flexmix::flexmix(\n",
+          "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
+          "  data = df_comb,\n",
+          "  k = %d,\n",
+          "  model = list(\n",
+          "    flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),\n",
+          "    flexmix::FLXMCmvbinary(bin_form)\n",
+          "  ),\n",
+          "  control = list(iter.max = 25, minprior = 0.05, verbose = 0)\n",
+          ")\n",
+          "clusters <- flexmix::clusters(fit)\n"
+        ),
+        k
+      )
     }
   })
 
@@ -1298,6 +1414,11 @@ server <- function(input, output, session) {
     k_range_str <- sprintf("2:%d", k_max)
 
     if (is.null(m) || m == "kamila") {
+      cores_snippet <- if (isTRUE(input$use_parallel) && !is.null(input$num_cores) && input$num_cores > 1) {
+        sprintf(",\n  numCores = %d", as.integer(input$num_cores))
+      } else {
+        ""
+      }
       sprintf(
         paste0(
           "# --- KAMILA Cluster Count Selection (Prediction Strength) ---\n",
@@ -1309,11 +1430,12 @@ server <- function(input, output, session) {
           "  numInit = 3,\n",
           "  calcNumClust = \"ps\",\n",
           "  numPredStrCvRun = 5,\n",
-          "  predStrThresh = 0.6\n",
+          "  predStrThresh = 0.6%s\n",
           ")\n",
           "best_k <- fit$nClust$bestNClust\n"
         ),
-        k_range_str
+        k_range_str,
+        cores_snippet
       )
     } else if (m == "gower_pam") {
       sprintf(
@@ -1361,7 +1483,7 @@ server <- function(input, output, session) {
         ),
         k_range_str
       )
-    } else if (m == "flexmix") {
+    } else if (m == "flexmix_multinom") {
       sprintf(
         paste0(
           "# --- FlexMix (stepFlexmix BIC Multinomial Selection) ---\n",
@@ -1379,6 +1501,34 @@ server <- function(input, output, session) {
           "  k = %s,\n",
           "  nrep = 1,\n",
           "  model = c(list(con_mod), cat_mods),\n",
+          "  control = list(iter.max = 20, minprior = 0.05, verbose = 0)\n",
+          ")\n",
+          "best_model <- flexmix::getModel(m_step, which = \"BIC\")\n",
+          "best_k <- best_model@k\n"
+        ),
+        k_range_str
+      )
+    } else if (m == "flexmix_binary") {
+      sprintf(
+        paste0(
+          "# --- FlexMix (stepFlexmix BIC Binary Levels Selection) ---\n",
+          "library(flexmix)\n\n",
+          "con_mat <- scale(as.matrix(dat$conVars))\n",
+          "cat_dummy <- model.matrix(~ . - 1, data = dat$catVars)\n",
+          "df_comb <- as.data.frame(cbind(con_mat, cat_dummy))\n",
+          "con_cols <- colnames(con_mat)\n",
+          "bin_cols <- colnames(cat_dummy)\n",
+          "con_form <- as.formula(paste0(\"cbind(\", paste(con_cols, collapse = \", \"), \") ~ 1\"))\n",
+          "bin_form <- as.formula(paste0(\"cbind(\", paste(bin_cols, collapse = \", \"), \") ~ 1\"))\n",
+          "m_step <- flexmix::stepFlexmix(\n",
+          "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
+          "  data = df_comb,\n",
+          "  k = %s,\n",
+          "  nrep = 1,\n",
+          "  model = list(\n",
+          "    flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),\n",
+          "    flexmix::FLXMCmvbinary(bin_form)\n",
+          "  ),\n",
           "  control = list(iter.max = 20, minprior = 0.05, verbose = 0)\n",
           ")\n",
           "best_model <- flexmix::getModel(m_step, which = \"BIC\")\n",
