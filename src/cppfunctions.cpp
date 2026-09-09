@@ -324,3 +324,72 @@ List jointTabSmoothedList(
   return(outList);
 }
 
+/* Pseudocode & Note: calcPsCpp
+ * Input: testMemb, integer coded vector (1-indexed) of test cluster assignments
+ *        teIntoTr, integer coded vector (1-indexed) of predicted test cluster assignments
+ *        numClust, number of clusters
+ * Output: NumericVector of prediction strength proportions psProps for each cluster.
+ *
+ * Mathematical Note:
+ * Evaluates prediction strength (Tibshirani & Walther, 2005) for each cluster k:
+ *   ps(k) = (1 / choose(n_k, 2)) * sum_{i < j in A_k} I(hat(y)_i == hat(y)_j)
+ * By partitioning cluster A_k into predicted class counts C_{k, m}, the number of
+ * agreeing pairs in A_k is sum_{m} choose(C_{k, m}, 2) = sum_{m} C_{k, m}(C_{k, m} - 1) / 2.
+ * Thus:
+ *   ps(k) = sum_{m} [ C_{k, m} * (C_{k, m} - 1) ] / [ n_k * (n_k - 1) ]
+ * This computes the exact combinatorial identity in O(N + K^2) time and O(K^2) memory,
+ * producing mathematically and numerically identical results to the legacy O(N^2) pairwise
+ * distance matrix approach without allocating an N x N matrix or performing quadratic loops.
+ */
+
+// [[Rcpp::export]]
+NumericVector calcPsCpp(
+  IntegerVector testMemb,
+  IntegerVector teIntoTr,
+  int numClust
+)
+{
+  int n = testMemb.size();
+  int maxPred = 0;
+  for (int i = 0; i < n; ++i) {
+    if (teIntoTr[i] > maxPred) {
+      maxPred = teIntoTr[i];
+    }
+  }
+  if (maxPred == 0 || numClust <= 0) {
+    return NumericVector(numClust, NA_REAL);
+  }
+
+  std::vector<double> counts(numClust * maxPred, 0.0);
+  std::vector<double> clustSize(numClust, 0.0);
+
+  for (int i = 0; i < n; ++i) {
+    int tm = testMemb[i] - 1;
+    int tr = teIntoTr[i] - 1;
+    if (tm >= 0 && tm < numClust && tr >= 0 && tr < maxPred) {
+      counts[tm * maxPred + tr] += 1.0;
+      clustSize[tm] += 1.0;
+    }
+  }
+
+  NumericVector psProps(numClust);
+  for (int cl = 0; cl < numClust; ++cl) {
+    double n_cl = clustSize[cl];
+    if (n_cl < 2.0) {
+      psProps[cl] = NA_REAL;
+    } else {
+      double nPairsAgree = 0.0;
+      for (int m = 0; m < maxPred; ++m) {
+        double cnt = counts[cl * maxPred + m];
+        if (cnt >= 2.0) {
+          nPairsAgree += cnt * (cnt - 1.0) / 2.0;
+        }
+      }
+      double totalPairs = n_cl * (n_cl - 1.0) / 2.0;
+      psProps[cl] = nPairsAgree / totalPairs;
+    }
+  }
+
+  return psProps;
+}
+

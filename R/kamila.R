@@ -76,6 +76,118 @@ initMeans <- function(conVar, method, numClust) {
   }
 }
 
+# Setup worker nodes in a cluster with library paths and package namespace
+setupClusterWorkers <- function(cl) {
+  lp <- .libPaths()
+  parallel::clusterCall(cl, function(p) .libPaths(p), lp)
+  pkgPath <- tryCatch(
+    getNamespaceInfo(asNamespace("kamila"), "path"),
+    error = function(e) ""
+  )
+  isDev <- tryCatch(
+    requireNamespace("pkgload", quietly = TRUE) && pkgload::is_dev_package("kamila"),
+    error = function(e) FALSE
+  )
+  parallel::clusterCall(cl, function(is_dev, path) {
+    if (is_dev && nzchar(path)) {
+      # #nocov start
+      pkgload::load_all(path, quiet = TRUE)
+      # #nocov end
+    } else {
+      library(kamila)
+    }
+  }, isDev, pkgPath)
+}
+
+# Execute one prediction strength cross-validation run
+calcSinglePsCvRun <- function(
+  cvRun,
+  numObs,
+  numInTest,
+  hasCon,
+  hasCat,
+  conVar,
+  catFactor,
+  numClust,
+  numInit,
+  conWeights,
+  catWeights,
+  maxIter,
+  conInitMethod,
+  catBw
+) {
+  resCol <- numeric(length(numClust))
+  for (ithNcInd in seq_along(numClust)) {
+    # generate cv indices
+    testInd <- sample(numObs, size = numInTest, replace = FALSE)
+
+    testCon <- if (hasCon) conVar[testInd, , drop = FALSE] else NULL
+    testCat <- if (hasCat) catFactor[testInd, , drop = FALSE] else NULL
+    trainCon <- if (hasCon) conVar[-testInd, , drop = FALSE] else NULL
+    trainCat <- if (hasCat) catFactor[-testInd, , drop = FALSE] else NULL
+
+    # cluster test data
+    testClust <- kamila(
+      conVar = testCon,
+      catFactor = testCat,
+      numClust = numClust[ithNcInd],
+      numInit = numInit,
+      conWeights = conWeights,
+      catWeights = catWeights,
+      maxIter = maxIter,
+      conInitMethod = conInitMethod,
+      catBw = catBw,
+      verbose = FALSE
+    )
+
+    # cluster training data
+    trainClust <- kamila(
+      conVar = trainCon,
+      catFactor = trainCat,
+      numClust = numClust[ithNcInd],
+      numInit = numInit,
+      conWeights = conWeights,
+      catWeights = catWeights,
+      maxIter = maxIter,
+      conInitMethod = conInitMethod,
+      catBw = catBw,
+      verbose = FALSE
+    )
+
+    # Allocate test data based on training clusters.
+    testDataClassify <- if (hasCon && hasCat) {
+      list(testCon, testCat)
+    } else if (hasCon) {
+      testCon
+    } else {
+      testCat
+    }
+
+    teIntoTr <- classifyKamila(
+      trainClust,
+      testDataClassify
+    )
+
+    # Calculate prediction strength proportions using Rcpp function.
+    # Uses exact combinatorial identity via contingency table counts C_{k,m}:
+    # psProps[k] = sum_m [C_{k,m} * (C_{k,m} - 1)] / [n_k * (n_k - 1)],
+    # evaluating pair co-membership in O(N + K^2) time instead of O(N^2) loops.
+    psProps <- calcPsCpp(
+      testClust$finalMemb,
+      teIntoTr,
+      numClust[ithNcInd]
+    )
+
+    # Calculate and update prediction strength results.
+    resCol[ithNcInd] <- ifelse(
+      test = all(is.na(psProps)),
+      yes = NA,
+      no = min(psProps, na.rm = TRUE)
+    )
+  }
+  return(resCol)
+}
+
 
 ######################
 # remove bumps (i.e. make sure xx is nondecreasing)
@@ -198,7 +310,9 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
   newY[coordsLtQ05] <- radKDE$x[coordsLtQ05] * (newY[maxPt] / radKDE$x[maxPt]) # y = x * sl
 
   # radial Jacobian transformation; up to proportionality constant
-  radY <- c(0, newY[-1] / radKDE$x[-1]^(pdim - 1))
+  # Issue #9 fix: avoid zero density at r = 0 by right-continuous extension
+  radY_rest <- newY[-1] / radKDE$x[-1]^(pdim - 1)
+  radY <- c(radY_rest[1], radY_rest)
 
   # replace densities over MAXDENS with MAXDENS
   overMax <- radY > MAXDENS
@@ -215,6 +329,7 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
   # now create resampling function
   resampler <- approxfun(x = radKDE$x, y = densR, rule = 1:2, method = "linear")
   kdes <- resampler(evalPoints)
+  kdes <- pmax(kdes, min(densR))
   if (!returnFun) {
     resampler <- NULL
   }
@@ -296,7 +411,11 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' number than, say, BIC based methods for large sample sizes. The user must
 #' specify the number of cross-validation runs and the threshold for
 #' determining the number of clusters. The smaller the threshold, the larger
-#' the number of clusters selected.
+#' the number of clusters selected. Cluster pair co-membership evaluation is
+#' accelerated via an Rcpp routine (calcPsCpp) that calculates exact agreement
+#' proportions via contingency table partitioning in O(N + K^2) time and O(K^2)
+#' memory, which is mathematically and numerically identical to the pairwise
+#' formulation without creating an O(N^2) distance matrix.
 #'
 #' Prediction strength scores range from 0 to 1, reflecting cluster stability and
 #' reproducibility across cross-validation folds. Higher scores indicate greater
@@ -308,6 +427,7 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' meets or exceeds \code{predStrThresh} is selected.
 #' @export
 #' @importFrom stats runif sd setNames
+#' @importFrom parallel makeCluster stopCluster parLapply clusterCall clusterExport clusterSetRNGStream
 #' @param conVar An optional data frame of continuous variables. At least one of
 #'   \code{conVar} or \code{catFactor} must be specified.
 #' @param catFactor An optional data frame of factors. At least one of
@@ -323,6 +443,10 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' @param calcNumClust Character: Method for selecting the number of clusters.
 #' @param numPredStrCvRun Numeric: Number of CV runs for prediction strength method. Ignored unless calcNumClust == 'ps'
 #' @param predStrThresh Numeric: Threshold for prediction strength method. Ignored unless calcNumClust == 'ps'
+#' @param numCores Numeric or cluster: Number of CPU cores to use for parallel
+#'   execution, or a cluster object created by \code{parallel::makeCluster}.
+#'   Defaults to 1 (sequential execution). Ignored unless
+#'   \code{calcNumClust == 'ps'}.
 #' @return A list with the following results objects:
 #' \item{finalMemb}{A numeric vector with cluster assignment indicated by integer.}
 #' \item{numIter}{}
@@ -362,7 +486,6 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
 #' @references Foss A, Markatou M; kamila: Clustering Mixed-Type Data in R and
 #'   Hadoop. Journal of Statistical Software, 83(13). 2018.
 #'   doi: 10.18637/jss.v083.i13
-
 kamila <- function(
   conVar = NULL,
   catFactor = NULL,
@@ -376,7 +499,8 @@ kamila <- function(
   verbose = FALSE,
   calcNumClust = "none",
   numPredStrCvRun = 10,
-  predStrThresh = 0.8
+  predStrThresh = 0.8,
+  numCores = 1
 ) {
   hasCon <- !is.null(conVar)
   hasCat <- !is.null(catFactor)
@@ -723,6 +847,19 @@ kamila <- function(
       stop("Input parameter numPredStrCvRun must be a positive integer.")
     }
 
+    # Test that numCores is a valid number of cores or a cluster object.
+    if (!inherits(numCores, "cluster")) {
+      if (
+        length(numCores) != 1 ||
+          is.na(numCores) ||
+          !is.numeric(numCores) ||
+          numCores != as.integer(numCores) ||
+          numCores < 1
+      ) {
+        stop("Input parameter numCores must be a positive integer or a cluster object.")
+      }
+    }
+
     psCvRes <- matrix(
       NaN,
       nrow = length(numClust),
@@ -735,114 +872,84 @@ kamila <- function(
 
     # Implement CV procedure
     numInTest <- floor(numObs / 2)
-    for (cvRun in 1:numPredStrCvRun) {
-      for (ithNcInd in seq_along(numClust)) {
-        # generate cv indices
-        testInd <- sample(numObs, size = numInTest, replace = FALSE)
+    isClustObj <- inherits(numCores, "cluster")
+    effectiveCores <- if (isClustObj) length(numCores) else min(as.integer(numCores), numPredStrCvRun)
 
-        testCon <- if (hasCon) conVar[testInd, , drop = FALSE] else NULL
-        testCat <- if (hasCat) catFactor[testInd, , drop = FALSE] else NULL
-        trainCon <- if (hasCon) conVar[-testInd, , drop = FALSE] else NULL
-        trainCat <- if (hasCat) catFactor[-testInd, , drop = FALSE] else NULL
-
-        # cluster test data
-        testClust <- kamila(
-          conVar = testCon,
-          catFactor = testCat,
-          numClust = numClust[ithNcInd],
+    if (!isClustObj && (numCores == 1 || effectiveCores == 1)) {
+      for (cvRun in 1:numPredStrCvRun) {
+        psCvRes[, cvRun] <- calcSinglePsCvRun(
+          cvRun = cvRun,
+          numObs = numObs,
+          numInTest = numInTest,
+          hasCon = hasCon,
+          hasCat = hasCat,
+          conVar = conVar,
+          catFactor = catFactor,
+          numClust = numClust,
           numInit = numInit,
           conWeights = conWeights,
           catWeights = catWeights,
           maxIter = maxIter,
           conInitMethod = conInitMethod,
-          catBw = catBw,
-          verbose = FALSE
+          catBw = catBw
         )
+      }
+    } else {
+      if (isClustObj) {
+        cl <- numCores
+      } else {
+        cl <- parallel::makeCluster(effectiveCores)
+        on.exit(parallel::stopCluster(cl), add = TRUE)
+      }
 
-        # cluster training data
-        trainClust <- kamila(
-          conVar = trainCon,
-          catFactor = trainCat,
-          numClust = numClust[ithNcInd],
-          numInit = numInit,
-          conWeights = conWeights,
-          catWeights = catWeights,
-          maxIter = maxIter,
-          conInitMethod = conInitMethod,
-          catBw = catBw,
-          verbose = FALSE
-        )
+      setupClusterWorkers(cl)
+      parallel::clusterSetRNGStream(cl)
 
-        testIndList <- mapply(
-          x = 1:numClust[ithNcInd],
-          function(x) which(testClust$finalMemb == x),
-          SIMPLIFY = FALSE
-        )
+      parallel::clusterExport(
+        cl = cl,
+        varlist = c(
+          "calcSinglePsCvRun", "numObs", "numInTest", "hasCon", "hasCat",
+          "conVar", "catFactor", "numClust", "numInit", "conWeights",
+          "catWeights", "maxIter", "conInitMethod", "catBw"
+        ),
+        envir = environment()
+      )
 
-        # Allocate test data based on training clusters.
-        testDataClassify <- if (hasCon && hasCat) {
-          list(testCon, testCat)
-        } else if (hasCon) {
-          testCon
-        } else {
-          testCat
+      psResList <- parallel::parLapply(
+        cl = cl,
+        X = 1:numPredStrCvRun,
+        fun = function(cvRun) {
+          calcSinglePsCvRun(
+            cvRun = cvRun,
+            numObs = numObs,
+            numInTest = numInTest,
+            hasCon = hasCon,
+            hasCat = hasCat,
+            conVar = conVar,
+            catFactor = catFactor,
+            numClust = numClust,
+            numInit = numInit,
+            conWeights = conWeights,
+            catWeights = catWeights,
+            maxIter = maxIter,
+            conInitMethod = conInitMethod,
+            catBw = catBw
+          )
         }
+      )
 
-        teIntoTr <- classifyKamila(
-          trainClust,
-          testDataClassify
-        )
-
-        # Initialize D matrix.
-        dMat <- matrix(
-          NaN,
-          nrow = numInTest,
-          ncol = numInTest
-        )
-
-        # Calculate D matrix.
-        # replace with RCpp
-        for (i in 1:(numInTest - 1)) {
-          for (j in (i + 1):numInTest) {
-            dMat[i, j] <- teIntoTr[i] == teIntoTr[j]
-          }
-        }
-
-        # Initialize proportions to zero.
-        psProps <- rep(0, numClust[ithNcInd])
-
-        # Calculate prediction strength proportions.
-        # replace with RCpp
-        for (cl in 1:numClust[ithNcInd]) {
-          clustN <- length(testIndList[[cl]])
-          if (clustN > 1) {
-            for (i in 1:(clustN - 1)) {
-              for (j in (i + 1):clustN) {
-                psProps[cl] <- psProps[cl] + dMat[testIndList[[cl]][i], testIndList[[cl]][j]]
-              }
-            }
-          }
-          if (clustN < 2) {
-            # if cluster size is 1 or zero, not applicable
-            psProps[cl] <- NA
-          } else {
-            # * 2 since only upper triangle of dMat is used.
-            psProps[cl] <- psProps[cl] / (clustN * (clustN - 1)) * 2
-          }
-        }
-
-        # Calculate and update prediction strength results.
-        psCvRes[ithNcInd, cvRun] <- ifelse(
-          test = all(is.na(psProps)),
-          yes = NA,
-          no = min(psProps, na.rm = TRUE)
-        )
-      } # end clusters
-    } # end cv runs
+      for (cvRun in 1:numPredStrCvRun) {
+        psCvRes[, cvRun] <- psResList[[cvRun]]
+      }
+    }
 
     # Calculate CV estimate of prediction strength for each cluster size.
     avgPredStr <- apply(psCvRes, 1, mean, na.rm = TRUE)
-    stdErrPredStr <- apply(psCvRes, 1, sd, na.rm = TRUE) / sqrt(numPredStrCvRun)
+    stdErrPredStr <- if (numPredStrCvRun > 1) {
+      apply(psCvRes, 1, sd, na.rm = TRUE) / sqrt(numPredStrCvRun)
+    } else {
+      setNames(rep(0, length(numClust)), numClust)
+    }
 
     # Calculate final number of clusters: largest # clust such that avg+sd
     # score is above the threshold.

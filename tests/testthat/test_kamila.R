@@ -78,6 +78,61 @@ test_that("KAMILA prediction strength works with single-variable catFactor data 
   expect_true(res$nClust$bestNClust %in% 2:3)
 })
 
+test_that("radialKDE and KAMILA handle distance 0 without producing -Inf (Issue #9)", {
+  withr::with_seed(42, {
+    # 1. Direct radialKDE test with distance 0 across various pdim
+    radii <- c(0.1, 0.5, 1.2, 1.8, 2.5)
+    for (p in 1:3) {
+      rkde <- radialKDE(radii = radii, evalPoints = c(0.0, 0.5, 1.0), pdim = p)
+      expect_true(all(rkde$kdes > 0))
+      expect_true(all(is.finite(log(rkde$kdes))))
+      expect_true(rkde$kdes[1] > 0)
+    }
+
+    # 2. kamila with duplicate continuous rows does not yield -Inf log-likelihood
+    con_dup <- data.frame(v1 = c(1, 1, 5, 5), v2 = c(1, 1, 5, 5))
+    cat_dup <- data.frame(cat = factor(c(1, 1, 2, 2)))
+    res_dup <- kamila(
+      conVar = con_dup,
+      catFactor = cat_dup,
+      numClust = 2,
+      numInit = 1,
+      conInitMethod = "sample"
+    )
+    expect_true(is.finite(res_dup$finalLogLik))
+    expect_equal(length(unique(res_dup$finalMemb)), 2)
+
+    # 3. classifyKamila correctly classifies a point sitting exactly on a cluster centroid
+    dat <- genMixedData(
+      sampSize = 40,
+      nConVar = 2,
+      nCatVar = 2,
+      nCatLevels = 2,
+      nConWithErr = 0,
+      nCatWithErr = 0,
+      popProportions = c(0.5, 0.5),
+      conErrLev = 0.05,
+      catErrLev = 0.05
+    )
+    con_df <- data.frame(dat$conVars)
+    cat_df <- data.frame(lapply(as.data.frame(dat$catVars), factor))
+    res_model <- kamila(conVar = con_df, catFactor = cat_df, numClust = 2, numInit = 3)
+
+    obs_idx <- which(res_model$finalMemb == 1)[1]
+    center1 <- res_model$finalCenters[1, ]
+    test_con <- data.frame(X1 = center1[1], X2 = center1[2])
+    test_cat <- cat_df[obs_idx, , drop = FALSE]
+    pred <- classifyKamila(res_model, newData = list(test_con, test_cat))
+    expect_equal(pred, 1)
+
+    # 4. classifyKamila with continuous-only model at centroid
+    res_con <- kamila(conVar = con_df, numClust = 2, numInit = 3)
+    center1_con <- res_con$finalCenters[1, ]
+    pred_con <- classifyKamila(res_con, data.frame(X1 = center1_con[1], X2 = center1_con[2]))
+    expect_equal(pred_con, 1)
+  })
+})
+
 test_that("KAMILA throws clear errors when inputs contain NA values (Issue #3)", {
   conDf <- data.frame(x = rnorm(10), y = rnorm(10))
   catDf <- data.frame(f = factor(rep(c("A", "B"), 5)))

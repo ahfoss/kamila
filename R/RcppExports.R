@@ -33,3 +33,7 @@ jointTabSmoothedList <- function(catFactorNum, membNew, numLev, catBw, kk) {
     .Call('_kamila_jointTabSmoothedList', PACKAGE = 'kamila', catFactorNum, membNew, numLev, catBw, kk)
 }
 
+calcPsCpp <- function(testMemb, teIntoTr, numClust) {
+    .Call('_kamila_calcPsCpp', PACKAGE = 'kamila', testMemb, teIntoTr, numClust)
+}
+
