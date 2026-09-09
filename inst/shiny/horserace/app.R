@@ -271,17 +271,20 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
   t_start <- proc.time()
   tryCatch({
     if (m == "kamila") {
-      num_cores_ps <- if (!is.null(ps_cores) && ps_cores > 1) as.integer(ps_cores) else 1
-      res_k <- kamila::kamila(
-        dat$conVars,
-        dat$catVars,
+      kam_args <- list(
+        conVar = dat$conVars,
+        catFactor = dat$catVars,
         numClust = k_range,
         numInit = 3,
         calcNumClust = "ps",
         numPredStrCvRun = 5,
-        predStrThresh = 0.6,
-        numCores = num_cores_ps
+        predStrThresh = 0.6
       )
+      if ("numCores" %in% names(formals(kamila::kamila))) {
+        num_cores_ps <- if (!is.null(ps_cores) && ps_cores > 1) as.integer(ps_cores) else 1
+        kam_args$numCores <- num_cores_ps
+      }
+      res_k <- do.call(kamila::kamila, kam_args)
       t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
       pred_k <- if (is.list(res_k$nClust)) res_k$nClust$bestNClust else res_k$nClust
       ari <- calc_ari(dat$trueID, res_k$finalMemb)
@@ -421,7 +424,18 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
         stringsAsFactors = FALSE
       )
     }
-  }, error = function(e) NULL)
+  }, error = function(e) {
+    data.frame(
+      Method = m_name,
+      Package = m_pkg,
+      True_K = true_k,
+      Predicted_K = NA,
+      Criterion = paste("Error:", substr(e$message, 1, 24)),
+      ARI = NA,
+      Time_ms = NA,
+      stringsAsFactors = FALSE
+    )
+  })
 }
 
 run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_cores = 4,
