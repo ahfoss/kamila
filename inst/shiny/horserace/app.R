@@ -227,19 +227,6 @@ ui <- fluidPage(
         selected = c("kamila", "gower_pam", "kproto", "cluspcamix", "varsellcm", "flexmix")
       ),
 
-      actionButton(
-        "btn_run_fixed",
-        "Run Fixed-K Benchmark",
-        class = "btn-primary btn-lg w-100",
-        style = "margin-top: 8px; font-weight: 600;"
-      ),
-      actionButton(
-        "btn_run_select",
-        "Run Cluster Selection (K in 2:5)",
-        class = "btn-outline-primary btn-md w-100",
-        style = "margin-top: 8px; font-weight: 600;"
-      ),
-
       tags$hr(),
       uiOutput("live_status_ui")
     ),
@@ -256,7 +243,13 @@ ui <- fluidPage(
             class = "alert alert-info",
             "Evaluate ARI (Adjusted Rand Index), misclassification error, and runtime for a fixed number of clusters."
           ),
-          tags$h4("Performance Summary", style = "font-weight: 600; margin-top: 15px;"),
+          actionButton(
+            "btn_run_fixed",
+            "Run Fixed-K Benchmark",
+            class = "btn-primary btn-md",
+            style = "margin-top: 4px; margin-bottom: 16px; font-weight: 600;"
+          ),
+          tags$h4("Performance Summary", style = "font-weight: 600; margin-top: 10px;"),
           tableOutput("benchmark_table"),
           tags$hr(),
           tags$h4("Visual Performance Comparison", style = "font-weight: 600;"),
@@ -271,7 +264,13 @@ ui <- fluidPage(
             tags$strong("Model Selection: "),
             "Simulates unknown cluster count over K in [2, 5]. Shows predicted cluster count and selection criterion."
           ),
-          tags$h4("Cluster Selection Results", style = "font-weight: 600; margin-top: 15px;"),
+          actionButton(
+            "btn_run_select",
+            "Run Cluster Selection (K in 2:5)",
+            class = "btn-primary btn-md",
+            style = "margin-top: 4px; margin-bottom: 16px; font-weight: 600;"
+          ),
+          tags$h4("Cluster Selection Results", style = "font-weight: 600; margin-top: 10px;"),
           tableOutput("selection_table"),
           tags$hr(),
           tags$h4("Selected K Comparison Plot", style = "font-weight: 600;"),
@@ -763,10 +762,11 @@ server <- function(input, output, session) {
   cluster_assignments <- reactive({
     dat <- sim_data()
     k <- isolate(input$k_clusters)
+    selected_methods <- input$methods
     membs <- list(true = dat$trueID)
 
     # KAMILA
-    if (has_pkg("kamila")) {
+    if ("kamila" %in% selected_methods && has_pkg("kamila")) {
       kam_res <- tryCatch({
         as.integer(kamila::kamila(
           dat$conVars,
@@ -780,7 +780,7 @@ server <- function(input, output, session) {
     }
 
     # Gower + PAM
-    if (has_pkg("cluster")) {
+    if ("gower_pam" %in% selected_methods && has_pkg("cluster")) {
       pam_res <- tryCatch({
         g_dist <- cluster::daisy(dat$fullData, metric = "gower")
         as.integer(cluster::pam(g_dist, k = k, diss = TRUE)$clustering)
@@ -789,7 +789,7 @@ server <- function(input, output, session) {
     }
 
     # K-Prototypes
-    if (has_pkg("clustMixType")) {
+    if ("kproto" %in% selected_methods && has_pkg("clustMixType")) {
       kp_res <- tryCatch({
         as.integer(clustMixType::kproto(dat$fullData, k = k, nstart = 2, verbose = FALSE)$cluster)
       }, error = function(e) NULL)
@@ -797,7 +797,7 @@ server <- function(input, output, session) {
     }
 
     # ClusPCAMix
-    if (has_pkg("clustrd")) {
+    if ("cluspcamix" %in% selected_methods && has_pkg("clustrd")) {
       clus_res <- tryCatch({
         as.integer(clustrd::cluspcamix(data = dat$fullData, nclus = k, ndim = 2, nstart = 2)$cluster)
       }, error = function(e) NULL)
@@ -805,7 +805,7 @@ server <- function(input, output, session) {
     }
 
     # VarSelLCM
-    if (has_pkg("VarSelLCM")) {
+    if ("varsellcm" %in% selected_methods && has_pkg("VarSelLCM")) {
       v_res <- tryCatch({
         v_fit <- VarSelLCM::VarSelCluster(
           x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
@@ -816,7 +816,7 @@ server <- function(input, output, session) {
     }
 
     # FlexMix
-    if (has_pkg("flexmix")) {
+    if ("flexmix" %in% selected_methods && has_pkg("flexmix")) {
       f_res <- tryCatch({
         cat_mat <- model.matrix(~ . - 1, data = dat$catVars)
         con_mat <- as.matrix(dat$conVars)
@@ -837,15 +837,33 @@ server <- function(input, output, session) {
     membs
   })
 
+  # Method code to display name mapping
+  method_name_map <- c(
+    kamila = "KAMILA",
+    gower_pam = "Gower + PAM",
+    kproto = "K-Prototypes",
+    cluspcamix = "ClusPCAMix",
+    varsellcm = "VarSelLCM",
+    flexmix = "FlexMix"
+  )
+
   # Render Tables & Plots
   output$benchmark_table <- renderTable({
-    benchmark_results()
+    res <- benchmark_results()
+    if (is.null(res) || !"Method" %in% names(res) || nrow(res) == 0) return(res)
+    active_methods <- method_name_map[input$methods]
+    filtered_res <- res[res$Method %in% active_methods, , drop = FALSE]
+    if (nrow(filtered_res) == 0) {
+      return(data.frame(Message = "No selected methods to display"))
+    }
+    filtered_res
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
 
   output$benchmark_plot <- renderPlot({
     res <- benchmark_results()
-    if (!"ARI" %in% names(res) || nrow(res) == 0) return(NULL)
-    valid_res <- res[!is.na(res$ARI), ]
+    if (is.null(res) || !"ARI" %in% names(res) || nrow(res) == 0) return(NULL)
+    active_methods <- method_name_map[input$methods]
+    valid_res <- res[!is.na(res$ARI) & res$Method %in% active_methods, , drop = FALSE]
     if (nrow(valid_res) == 0) return(NULL)
 
     par(mfrow = c(1, 2), mar = c(7.5, 4.5, 3, 1))
@@ -877,13 +895,21 @@ server <- function(input, output, session) {
   })
 
   output$selection_table <- renderTable({
-    selection_results()
+    res <- selection_results()
+    if (is.null(res) || !"Method" %in% names(res) || nrow(res) == 0) return(res)
+    active_methods <- method_name_map[input$methods]
+    filtered_res <- res[res$Method %in% active_methods, , drop = FALSE]
+    if (nrow(filtered_res) == 0) {
+      return(data.frame(Message = "No selected methods to display"))
+    }
+    filtered_res
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
 
   output$selection_plot <- renderPlot({
     res <- selection_results()
-    if (!"Predicted_K" %in% names(res) || nrow(res) == 0) return(NULL)
-    valid_res <- res[!is.na(res$Predicted_K), ]
+    if (is.null(res) || !"Predicted_K" %in% names(res) || nrow(res) == 0) return(NULL)
+    active_methods <- method_name_map[input$methods]
+    valid_res <- res[!is.na(res$Predicted_K) & res$Method %in% active_methods, , drop = FALSE]
     if (nrow(valid_res) == 0) return(NULL)
 
     par(mar = c(7.5, 4.5, 3, 1))
