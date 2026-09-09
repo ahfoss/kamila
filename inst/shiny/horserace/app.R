@@ -98,7 +98,7 @@ calc_misclass_error <- function(true_labels, pred_labels) {
 # Synthetic Mixed Data Generator (1,000 to 5,000 observations)
 # ------------------------------------------------------------------------------
 generate_synthetic_mixed_data <- function(n = 1000, p_con = 5, p_cat = 5, k = 3,
-                                          separation = 2.0, num_levels = 4, seed = NULL) {
+                                          separation = 2.0, num_levels = 8, seed = NULL) {
   if (!is.null(seed)) set.seed(seed)
 
   props <- rep(1 / k, k)
@@ -383,19 +383,33 @@ run_single_selection <- function(m, dat, true_k) {
   }, error = function(e) NULL)
 }
 
-run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_cores = 4, ...) {
+run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_cores = 4,
+                              cluster_obj = NULL, ...) {
   is_webr <- exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1"
   n_methods <- length(method_keys)
   if (!use_parallel || is_webr || num_cores <= 1 || n_methods <= 1) {
-    return(lapply(method_keys, function(m) runner_fn(m, ...)))
+    t_start <- proc.time()
+    res <- lapply(method_keys, function(m) runner_fn(m, ...))
+    t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+    attr(res, "wall_clock_ms") <- t_elapsed
+    return(res)
   }
 
   n_workers <- min(n_methods, as.integer(num_cores))
-  cl <- tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
+  cl <- if (!is.null(cluster_obj)) cluster_obj else tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
+  is_temp_cl <- is.null(cluster_obj) && !is.null(cl)
+
   if (is.null(cl)) {
-    return(lapply(method_keys, function(m) runner_fn(m, ...)))
+    t_start <- proc.time()
+    res <- lapply(method_keys, function(m) runner_fn(m, ...))
+    t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+    attr(res, "wall_clock_ms") <- t_elapsed
+    return(res)
   }
-  on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
+
+  if (is_temp_cl) {
+    on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
+  }
 
   args_list <- list(...)
   parallel::clusterExport(
@@ -403,22 +417,14 @@ run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_c
     varlist = c("has_pkg", "safe_scale", "calc_ari", "calc_misclass_error", "method_meta", "runner_fn", "args_list"),
     envir = environment()
   )
-  parallel::clusterEvalQ(cl, {
-    suppressPackageStartupMessages({
-      library(kamila)
-      library(cluster)
-      if (requireNamespace("clustMixType", quietly = TRUE)) library(clustMixType)
-      if (requireNamespace("clustrd", quietly = TRUE)) library(clustrd)
-      if (requireNamespace("VarSelLCM", quietly = TRUE)) library(VarSelLCM)
-      if (requireNamespace("flexmix", quietly = TRUE)) library(flexmix)
-      if (requireNamespace("mvtnorm", quietly = TRUE)) library(mvtnorm)
-      if (requireNamespace("mclust", quietly = TRUE)) library(mclust)
-    })
-  })
 
-  parallel::parLapply(cl, method_keys, function(m) {
+  t_start <- proc.time()
+  res <- parallel::parLapply(cl, method_keys, function(m) {
     do.call(runner_fn, c(list(m = m), args_list))
   })
+  t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+  attr(res, "wall_clock_ms") <- t_elapsed
+  res
 }
 
 # ------------------------------------------------------------------------------
@@ -469,13 +475,16 @@ ui <- fluidPage(
       ),
       fluidRow(
         column(6, sliderInput("p_con", "Num. Continuous Vars.", min = 2, max = 15, value = 5, step = 1)),
-        column(6, sliderInput("p_cat", "Num. Categorial Vars.", min = 2, max = 15, value = 5, step = 1))
+        column(6, sliderInput("p_cat", "Num. Categorical Vars.", min = 2, max = 15, value = 5, step = 1))
       ),
       fluidRow(
         column(6, sliderInput("k_clusters", "Num. True Clusters:", min = 2, max = 5, value = 3, step = 1)),
-        column(6, sliderInput("separation", "Avg. Cluster Separation", min = 0.5, max = 4.0, value = 2.0, step = 0.5))
+        column(6, sliderInput("num_levels", "Num. Levels per Cat. Var:", min = 2, max = 16, value = 8, step = 1))
       ),
-      numericInput("rand_seed", "Random Seed:", value = 42, min = 1),
+      fluidRow(
+        column(6, sliderInput("separation", "Avg. Cluster Separation", min = 0.5, max = 4.0, value = 2.0, step = 0.5)),
+        column(6, numericInput("rand_seed", "Random Seed:", value = 42, min = 1))
+      ),
 
       tags$hr(),
       tags$h4("Techniques to Compare", style = "font-weight: 600;"),
@@ -532,6 +541,7 @@ ui <- fluidPage(
             style = "margin-top: 4px; margin-bottom: 16px; font-weight: 600;"
           ),
           tags$h4("Performance Summary", style = "font-weight: 600; margin-top: 10px;"),
+          uiOutput("fixed_timing_summary"),
           tableOutput("benchmark_table"),
           tags$hr(),
           tags$h4("Visual Performance Comparison", style = "font-weight: 600;"),
@@ -569,6 +579,7 @@ ui <- fluidPage(
             style = "margin-top: 4px; margin-bottom: 16px; font-weight: 600;"
           ),
           tags$h4("Cluster Selection Results", style = "font-weight: 600; margin-top: 10px;"),
+          uiOutput("selection_timing_summary"),
           tableOutput("selection_table"),
           tags$hr(),
           tags$h4("Selected K Comparison Plot", style = "font-weight: 600;"),
@@ -658,6 +669,50 @@ ui <- fluidPage(
 # ------------------------------------------------------------------------------
 server <- function(input, output, session) {
 
+  # Session-Level Worker Cluster Lifecycle Management
+  session_cluster <- reactiveVal(NULL)
+  current_cluster_size <- reactiveVal(0L)
+  fixed_wall_time <- reactiveVal(NULL)
+  selection_wall_time <- reactiveVal(NULL)
+
+  get_or_create_cluster <- function(n_workers) {
+    cl <- session_cluster()
+    cur_size <- current_cluster_size()
+    if (!is.null(cl) && cur_size == n_workers) {
+      return(cl)
+    }
+    if (!is.null(cl)) {
+      try(parallel::stopCluster(cl), silent = TRUE)
+      session_cluster(NULL)
+      current_cluster_size(0L)
+    }
+    new_cl <- tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
+    if (is.null(new_cl)) return(NULL)
+
+    parallel::clusterEvalQ(new_cl, {
+      suppressPackageStartupMessages({
+        library(kamila)
+        library(cluster)
+        if (requireNamespace("clustMixType", quietly = TRUE)) library(clustMixType)
+        if (requireNamespace("clustrd", quietly = TRUE)) library(clustrd)
+        if (requireNamespace("VarSelLCM", quietly = TRUE)) library(VarSelLCM)
+        if (requireNamespace("flexmix", quietly = TRUE)) library(flexmix)
+        if (requireNamespace("mvtnorm", quietly = TRUE)) library(mvtnorm)
+        if (requireNamespace("mclust", quietly = TRUE)) library(mclust)
+      })
+    })
+    session_cluster(new_cl)
+    current_cluster_size(n_workers)
+    new_cl
+  }
+
+  session$onSessionEnded(function() {
+    cl <- session_cluster()
+    if (!is.null(cl)) {
+      try(parallel::stopCluster(cl), silent = TRUE)
+    }
+  })
+
   # Dataset Generator
   sim_data <- reactive({
     input$btn_run_fixed
@@ -669,6 +724,7 @@ server <- function(input, output, session) {
         p_cat = input$p_cat,
         k = input$k_clusters,
         separation = input$separation,
+        num_levels = input$num_levels,
         seed = input$rand_seed
       )
     })
@@ -698,6 +754,12 @@ server <- function(input, output, session) {
       "Running Fixed-K Benchmark (Sequential)..."
     }
 
+    worker_cl <- if (use_par && n_cores > 1) {
+      get_or_create_cluster(min(n_cores, length(valid_methods)))
+    } else {
+      NULL
+    }
+
     results_list <- withProgress(
       message = msg,
       detail = "Executing clustering algorithms...",
@@ -708,12 +770,14 @@ server <- function(input, output, session) {
           runner_fn = run_single_fixed_k,
           use_parallel = use_par,
           num_cores = n_cores,
+          cluster_obj = worker_cl,
           dat = dat,
           k = k
         )
       }
     )
 
+    fixed_wall_time(attr(results_list, "wall_clock_ms"))
     do.call(rbind, results_list)
   }, ignoreNULL = FALSE)
 
@@ -741,6 +805,12 @@ server <- function(input, output, session) {
       "Running Cluster Selection (Sequential)..."
     }
 
+    worker_cl <- if (use_par && n_cores > 1) {
+      get_or_create_cluster(min(n_cores, length(valid_methods)))
+    } else {
+      NULL
+    }
+
     results_list <- withProgress(
       message = msg,
       detail = "Evaluating criteria over K in [2, 5]...",
@@ -751,12 +821,14 @@ server <- function(input, output, session) {
           runner_fn = run_single_selection,
           use_parallel = use_par,
           num_cores = n_cores,
+          cluster_obj = worker_cl,
           dat = dat,
           true_k = true_k
         )
       }
     )
 
+    selection_wall_time(attr(results_list, "wall_clock_ms"))
     valid_rows <- results_list[!sapply(results_list, is.null)]
     if (length(valid_rows) == 0) {
       return(data.frame(Message = "No selection results returned"))
@@ -856,6 +928,32 @@ server <- function(input, output, session) {
   )
 
   # Render Tables & Plots
+  output$fixed_timing_summary <- renderUI({
+    wall_ms <- fixed_wall_time()
+    res <- benchmark_results()
+    if (is.null(wall_ms) || is.null(res) || !"Time_ms" %in% names(res)) return(NULL)
+    active_methods <- method_name_map[input$methods]
+    valid_res <- res[!is.na(res$Time_ms) & res$Method %in% active_methods, , drop = FALSE]
+    if (nrow(valid_res) == 0) return(NULL)
+    seq_sum <- sum(valid_res$Time_ms, na.rm = TRUE)
+    speedup <- if (wall_ms > 0) round(seq_sum / wall_ms, 2) else 1.0
+    tags$div(
+      style = "margin-bottom: 12px; font-size: 0.95rem; color: #495057;",
+      tags$span(tags$strong("Total Wall-Clock Time: "), sprintf("%.1f ms", wall_ms)),
+      tags$span(" | "),
+      tags$span(tags$strong("Sequential Sum of Runtimes: "), sprintf("%.1f ms", seq_sum)),
+      if (speedup > 1.05) {
+        tags$span(
+          class = "badge bg-success",
+          style = "margin-left: 8px; font-size: 0.85rem; padding: 4px 8px;",
+          sprintf("%.2fx Parallel Speedup", speedup)
+        )
+      } else {
+        NULL
+      }
+    )
+  })
+
   output$benchmark_table <- renderTable({
     res <- benchmark_results()
     if (is.null(res) || !"Method" %in% names(res) || nrow(res) == 0) return(res)
@@ -900,6 +998,32 @@ server <- function(input, output, session) {
       cex.names = 0.95
     )
     abline(h = axTicks(2), col = "gray80", lty = 2)
+  })
+
+  output$selection_timing_summary <- renderUI({
+    wall_ms <- selection_wall_time()
+    res <- selection_results()
+    if (is.null(wall_ms) || is.null(res) || !"Time_ms" %in% names(res)) return(NULL)
+    active_methods <- method_name_map[input$methods]
+    valid_res <- res[!is.na(res$Time_ms) & res$Method %in% active_methods, , drop = FALSE]
+    if (nrow(valid_res) == 0) return(NULL)
+    seq_sum <- sum(valid_res$Time_ms, na.rm = TRUE)
+    speedup <- if (wall_ms > 0) round(seq_sum / wall_ms, 2) else 1.0
+    tags$div(
+      style = "margin-bottom: 12px; font-size: 0.95rem; color: #495057;",
+      tags$span(tags$strong("Total Wall-Clock Time: "), sprintf("%.1f ms", wall_ms)),
+      tags$span(" | "),
+      tags$span(tags$strong("Sequential Sum of Runtimes: "), sprintf("%.1f ms", seq_sum)),
+      if (speedup > 1.05) {
+        tags$span(
+          class = "badge bg-success",
+          style = "margin-left: 8px; font-size: 0.85rem; padding: 4px 8px;",
+          sprintf("%.2fx Parallel Speedup", speedup)
+        )
+      } else {
+        NULL
+      }
+    )
   })
 
   output$selection_table <- renderTable({
