@@ -25,12 +25,24 @@ getIndividualLogProbs <- function(catFactorNum, catWeights, logProbsCond_i) {
     .Call('_kamila_getIndividualLogProbs', PACKAGE = 'kamila', catFactorNum, catWeights, logProbsCond_i)
 }
 
+calcCatLogLiks <- function(catFactorNum, catWeights, logProbsCond_i) {
+    .Call('_kamila_calcCatLogLiks', PACKAGE = 'kamila', catFactorNum, catWeights, logProbsCond_i)
+}
+
 aggregateMeans <- function(conVar, membNew, kk) {
     .Call('_kamila_aggregateMeans', PACKAGE = 'kamila', conVar, membNew, kk)
 }
 
 jointTabSmoothedList <- function(catFactorNum, membNew, numLev, catBw, kk) {
     .Call('_kamila_jointTabSmoothedList', PACKAGE = 'kamila', catFactorNum, membNew, numLev, catBw, kk)
+}
+
+updateLogProbs <- function(catFactorNum, membNew, numLev, catBw, kk) {
+    .Call('_kamila_updateLogProbs', PACKAGE = 'kamila', catFactorNum, membNew, numLev, catBw, kk)
+}
+
+interpRadialKde <- function(y, maxEval, pdim, evalPoints) {
+    .Call('_kamila_interpRadialKde', PACKAGE = 'kamila', y, maxEval, pdim, evalPoints)
 }
 
 calcPsCpp <- function(testMemb, teIntoTr, numClust) {
