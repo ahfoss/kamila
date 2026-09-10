@@ -22,10 +22,13 @@ test_that("KAMILA runs as expected, small data set", {
 test_that("KAMILA warns if pred-strength is used with a single numClust", {
   expect_warning(
     kamila(
-      conVar = data.frame(rnorm(10), rnorm(10)),
+      conVar = data.frame(
+        x = c(rep(0, 10), rep(10, 10)),
+        y = c(rep(0, 10), rep(10, 10))
+      ),
       catFactor = data.frame(
-        factor(sample(1:4, size = 10, rep = TRUE)),
-        factor(sample(1:4, size = 10, rep = TRUE))
+        f1 = factor(c(rep(1, 10), rep(2, 10))),
+        f2 = factor(c(rep(1, 10), rep(2, 10)))
       ),
       numClust = 2,
       numInit = 2,
@@ -35,7 +38,7 @@ test_that("KAMILA warns if pred-strength is used with a single numClust", {
       verbose = FALSE,
       calcNumClust = "ps",
       numPredStrCvRun = 2,
-      predStrThresh = 0.8
+      predStrThresh = 0.5
     ),
     "Input parameter numClust is a scalar; the prediction strength"
   )

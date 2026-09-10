@@ -6,4 +6,5 @@
 ^CONTRIBUTING\.md$
 ^\.lintr$
 ^codecov\.yml$
-
+^\.git$
+^\.gitattributes$
