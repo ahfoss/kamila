@@ -13,8 +13,6 @@
 #' @useDynLib kamila
 #' @importFrom Rcpp sourceCpp
 #' @importFrom KernSmooth bkde
-#' @importFrom gtools rdirichlet
-#' @importFrom abind abind
 
 # tryCatch(
 #  sourceCpp("./src/cppfunctions.cpp")
@@ -33,15 +31,9 @@ myCatKern <- function(kdat, bw, tabOnly = TRUE) {
   if (length(bw) == 1) bw <- rep(bw, ndim)
   for (dd in 1:ndim) {
     dimCounts <- apply(X = tt, MARGIN = (1:ndim)[-dd], FUN = sum)
-    l1 <- list()
-    for (i in 1:dims[dd]) {
-      dimInds <- dims
-      dimInds[dd] <- 1
-      rotatedMat <- array(dimCounts, dim = dimInds)
-      l1[[i]] <- rotatedMat
-    }
-    l1$along <- dd
-    offCounts <- do.call(abind::abind, l1)
+    perm <- c(dd, (1:ndim)[-dd])
+    offCounts <- aperm(array(rep(dimCounts, each = dims[dd]), dim = dims[perm]), order(perm))
+    dimnames(offCounts) <- dimnames(tt)
     offCounts <- offCounts - tt
     tt <- (1 - bw[dd]) * tt + bw[dd] / (dims[dd] - 1) * offCounts
   }
@@ -641,7 +633,7 @@ kamila <- function(
           numLev,
           function(xx) {
             matrix(
-              data = log(gtools::rdirichlet(n = numClust, alpha = rep(1, xx))),
+              data = log(rdirichlet(n = numClust, alpha = rep(1, xx))),
               nrow = numClust,
               dimnames = list(clust = 1:numClust, level = 1:xx)
             )

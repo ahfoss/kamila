@@ -3,7 +3,9 @@
 ^\.github$
 ^\.agents$
 ^AGENTS\.md$
+^CONTRIBUTING\.md$
 ^\.lintr$
 ^codecov\.yml$
 ^docs$
-
+^\.git$
+^\.gitattributes$

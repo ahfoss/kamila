@@ -32,19 +32,12 @@ BugReports: https://github.com/ahfoss/kamila/issues
 Imports:
     stats,
     parallel,
-    abind,
     KernSmooth,
-    gtools,
-    Rcpp,
-    plyr
+    Rcpp
 LinkingTo: Rcpp
 Suggests:
     testthat,
     withr,
-    clustMD,
-    ggplot2,
-    Hmisc,
-    covr,
     xml2,
     shiny,
     cluster,
@@ -56,5 +49,7 @@ Suggests:
     mclust,
     mixtools,
     MASS
+    pkgload,
+    covr
 Config/roxygen2/version: 8.1.0
 Config/testthat/edition: 3
