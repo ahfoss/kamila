@@ -1,0 +1,71 @@
+name: Performance Superiority Benchmark
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      delta:
+        description: 'Superiority margin delta (fraction, e.g. 0.01 for 1%)'
+        required: false
+        default: '0.01'
+      require_all:
+        description: 'Require all tiers to be superior (TRUE or FALSE)'
+        required: false
+        default: 'TRUE'
+
+jobs:
+  benchmark-superiority:
+    name: Statistical Superiority Benchmark
+    # Only execute if the PR is labeled 'benchmark' or if triggered manually
+    if: contains(github.event.pull_request.labels.*.name, 'benchmark') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - name: Checkout Candidate (PR / HEAD)
+        uses: actions/checkout@v4
+        with:
+          path: candidate_repo
+
+      - name: Checkout Baseline (Base Branch)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref || 'master' }}
+          path: baseline_repo
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install Package Dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: candidate_repo
+          needs: check
+
+      - name: Install Baseline Package
+        run: |
+          mkdir -p libs/base
+          Rscript -e "install.packages('baseline_repo', repos = NULL, type = 'source', lib = 'libs/base')"
+
+      - name: Install Candidate Package
+        run: |
+          mkdir -p libs/cand
+          Rscript -e "install.packages('candidate_repo', repos = NULL, type = 'source', lib = 'libs/cand')"
+
+      - name: Run Superiority Benchmark Suite
+        run: |
+          DELTA="${{ inputs.delta || '0.01' }}"
+          REQUIRE_ALL="${{ inputs.require_all || 'TRUE' }}"
+          Rscript candidate_repo/inst/benchmarks/run_superiority_benchmark.R \
+            --base-lib libs/base \
+            --cand-lib libs/cand \
+            --delta "$DELTA" \
+            --require-all "$REQUIRE_ALL"
