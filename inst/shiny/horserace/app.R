@@ -34,6 +34,13 @@ get_valid_val <- function(val, default_val, min_val = NULL) {
   if (is.integer(default_val)) as.integer(num_val) else num_val
 }
 
+is_webr_env <- function() {
+  exists("webr", envir = .GlobalEnv) ||
+    Sys.getenv("WEBR") == "1" ||
+    grepl("wasm", R.version$platform, ignore.case = TRUE) ||
+    grepl("emscripten", R.version$platform, ignore.case = TRUE)
+}
+
 safe_scale <- function(m) {
   m_mat <- as.matrix(m)
   sds <- apply(m_mat, 2, sd, na.rm = TRUE)
@@ -44,14 +51,27 @@ safe_scale <- function(m) {
 }
 
 calc_ari <- function(true_labels, pred_labels) {
+  if (is.null(true_labels) || is.null(pred_labels) ||
+        length(true_labels) == 0 || length(pred_labels) == 0) {
+    return(0.0)
+  }
   true_v <- as.vector(as.integer(true_labels))
   pred_v <- as.vector(as.integer(pred_labels))
 
+  valid_idx <- which(!is.na(true_v) & !is.na(pred_v))
+  if (length(valid_idx) < 2) return(1.0)
+  true_v <- true_v[valid_idx]
+  pred_v <- pred_v[valid_idx]
+
   if (has_pkg("mclust")) {
-    return(mclust::adjustedRandIndex(true_v, pred_v))
+    ari_res <- tryCatch(mclust::adjustedRandIndex(true_v, pred_v), error = function(e) NA_real_)
+    if (!is.null(ari_res) && length(ari_res) == 1 && !is.na(ari_res)) {
+      return(as.numeric(ari_res))
+    }
   }
+
   tab <- table(true_v, pred_v)
-  n <- length(true_v)
+  n <- sum(tab)
   if (n < 2) return(1.0)
 
   comb2 <- function(x) x * (x - 1) / 2
@@ -61,51 +81,50 @@ calc_ari <- function(true_labels, pred_labels) {
 
   expected <- (sum_comb_rows * sum_comb_cols) / comb2(n)
   max_val <- 0.5 * (sum_comb_rows + sum_comb_cols)
+  denom <- max_val - expected
 
-  if (max_val == expected) return(1.0)
-  (sum_comb_tab - expected) / (max_val - expected)
+  if (is.na(denom) || length(denom) == 0 || denom == 0) {
+    return(1.0)
+  }
+  res <- (sum_comb_tab - expected) / denom
+  if (is.na(res) || length(res) == 0) 1.0 else as.numeric(res)
 }
 
 calc_misclass_error <- function(true_labels, pred_labels) {
+  if (is.null(true_labels) || is.null(pred_labels) ||
+        length(true_labels) == 0 || length(pred_labels) == 0) {
+    return(0.0)
+  }
   true_v <- as.vector(as.integer(true_labels))
   pred_v <- as.vector(as.integer(pred_labels))
+
+  valid_idx <- which(!is.na(true_v) & !is.na(pred_v))
+  if (length(valid_idx) == 0) return(0.0)
+  true_v <- true_v[valid_idx]
+  pred_v <- pred_v[valid_idx]
 
   tab <- table(true_v, pred_v)
   k_true <- nrow(tab)
   k_pred <- ncol(tab)
-
-  if (k_pred > 6 || k_true > 6) {
-    # Greedy matching heuristic for larger K
-    matched_correct <- 0
-    temp_tab <- tab
-    for (i in 1:min(k_true, k_pred)) {
-      max_idx <- which(temp_tab == max(temp_tab), arr.ind = TRUE)[1, ]
-      matched_correct <- matched_correct + temp_tab[max_idx[1], max_idx[2]]
-      temp_tab[max_idx[1], ] <- -1
-      temp_tab[, max_idx[2]] <- -1
-    }
-    return(1 - (matched_correct / length(true_v)))
+  if (is.null(k_true) || is.null(k_pred) || k_true == 0 || k_pred == 0) {
+    return(0.0)
   }
 
-  # Exact permutation matching for K <= 6
-  perms <- function(v) {
-    if (length(v) <= 1) return(matrix(v, 1, 1))
-    do.call(rbind, lapply(seq_along(v), function(i) {
-      cbind(v[i], perms(v[-i]))
-    }))
+  matched_correct <- 0
+  temp_tab <- as.matrix(tab)
+  n_matches <- min(k_true, k_pred)
+
+  for (i in seq_len(n_matches)) {
+    if (max(temp_tab) < 0) break
+    max_idx <- which(temp_tab == max(temp_tab), arr.ind = TRUE)[1, , drop = FALSE]
+    r <- max_idx[1, 1]
+    c <- max_idx[1, 2]
+    matched_correct <- matched_correct + temp_tab[r, c]
+    temp_tab[r, ] <- -1
+    temp_tab[, c] <- -1
   }
 
-  all_p <- perms(1:k_true)
-  max_correct <- 0
-  for (i in seq_len(nrow(all_p))) {
-    p <- all_p[i, ]
-    cols_to_use <- p[seq_len(min(k_true, k_pred))]
-    cur_correct <- sum(sapply(seq_along(cols_to_use), function(idx) {
-      if (idx <= ncol(tab)) tab[cols_to_use[idx], idx] else 0
-    }))
-    if (cur_correct > max_correct) max_correct <- cur_correct
-  }
-  1 - (max_correct / length(true_v))
+  round(max(0, min(1, 1 - (matched_correct / length(true_v)))), 4)
 }
 
 # ------------------------------------------------------------------------------
@@ -173,11 +192,15 @@ method_meta <- list(
 
 detected_cores_count <- tryCatch({
   p_cores <- parallel::detectCores(logical = FALSE)
-  if (is.na(p_cores) || p_cores < 1) {
+  if (is.null(p_cores) || length(p_cores) == 0 || is.na(p_cores[1]) || p_cores[1] < 1) {
     p_cores <- parallel::detectCores()
   }
-  if (is.na(p_cores) || p_cores < 1) 2 else p_cores
-}, error = function(e) 2)
+  if (is.null(p_cores) || length(p_cores) == 0 || is.na(p_cores[1]) || p_cores[1] < 1) {
+    1L
+  } else {
+    as.integer(p_cores[1])
+  }
+}, error = function(e) 1L)
 
 run_single_fixed_k <- function(m, dat, k) {
   m_info <- method_meta[[m]]
@@ -463,9 +486,10 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
 
 run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_cores = 4,
                               cluster_obj = NULL, progress_fn = NULL, ...) {
-  is_webr <- exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1"
+  is_webr <- is_webr_env()
   n_methods <- length(method_keys)
-  if (!use_parallel || is_webr || num_cores <= 1 || n_methods <= 1) {
+  num_cores_val <- get_valid_val(num_cores, 1L, min_val = 1)
+  if (!use_parallel || is_webr || num_cores_val <= 1 || n_methods <= 1) {
     t_start <- proc.time()
     res <- vector("list", n_methods)
     for (i in seq_along(method_keys)) {
@@ -480,7 +504,7 @@ run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_c
     return(res)
   }
 
-  n_workers <- min(n_methods, as.integer(num_cores))
+  n_workers <- min(n_methods, as.integer(num_cores_val))
   cl <- if (!is.null(cluster_obj)) cluster_obj else tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
   is_temp_cl <- is.null(cluster_obj) && !is.null(cl)
 
