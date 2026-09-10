@@ -63,19 +63,30 @@ Run all commands from the repository root directory using `Rscript` or an intera
 - **Rebuilding Bindings**: Whenever C++ function signatures change, run `Rcpp::compileAttributes()` before testing or committing.
 - **Memory Safety**: Use Rcpp structures (`Rcpp::NumericMatrix`, `Rcpp::IntegerVector`, `Rcpp::NumericVector`) and avoid unmanaged raw pointers.
 
+### Changelog Maintenance
+- **Mandatory Changelog Updates**: Any changes, enhancements, bug fixes, deprecations, or version updates **MUST** be logged in [`CHANGELOG.md`](CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standard).
+
+### Pre-Commit Verification & Testing
+Before committing any changes, you **MUST** run and pass all verification checks:
+1. **Unit Tests**: Run `devtools::test()`. All tests must pass with 0 failures and 0 errors.
+2. **Linter**: Run `lintr::lint_package()`. There must be 0 linter warnings or violations.
+3. **Code Coverage**: Run `covr::package_coverage()`. Code coverage **MUST NOT** decrease below **100%** from any commit. Every new function, branch, edge case, and error condition must be accompanied by corresponding unit tests.
+4. **Package Check**: Run `devtools::check(cran = TRUE)`. Ensure the package builds with 0 errors, 0 warnings, and 0 notes.
+
 ### CI/CD & Ignored Files
 - **Ignore Rules**: Never commit build artifacts (`*.o`, `*.so`, `*.dll`, `*.Rcheck/`, `00check.log`, `.RData`).
-- **CRAN Compliance**: Ensure all non-package root files (`AGENTS.md`, `.lintr`, `.github/`, `codecov.yml`) are listed in `.Rbuildignore`.
+- **CRAN Compliance**: Ensure all non-package root files (`AGENTS.md`, `CONTRIBUTING.md`, `.lintr`, `.github/`, `codecov.yml`) are listed in `.Rbuildignore`.
 
 ---
 
 ## 4. Git Commit & Branching Conventions
 
 - **Branch Management**: **NEVER** commit or push directly to `master` unless explicitly requested by the user. Always perform development and commits on feature or bugfix branches (`fix/*`, `feature/*`).
+- **Pre-Commit Checks**: Do NOT commit without passing unit tests, lintr checks, and verifying 100% code coverage.
 - **Commit Format**: Use concise Conventional Commit messages:
   - `feat:` New feature or parameter addition
   - `fix:` Bug fix or error resolution
-  - `docs:` Documentation updates (roxygen2 / README / AGENTS.md)
+  - `docs:` Documentation updates (roxygen2 / README / AGENTS.md / CHANGELOG.md)
   - `ci:` Pipeline changes (`.github/workflows`)
   - `test:` Adding or updating `testthat` specs
   - `refactor:` Code reorganization without behavior change
