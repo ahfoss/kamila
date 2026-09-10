@@ -1,5 +1,5 @@
 
-# kamila [![R-CMD-check](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml) [![test-coverage](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml) [![Codecov test coverage](https://codecov.io/gh/ahfoss/kamila/branch/master/graph/badge.svg)](https://app.codecov.io/gh/ahfoss/kamila) [![lint](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/grand-total/kamila)](https://cran.r-project.org/package=kamila) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/kamila)](https://cran.r-project.org/package=kamila)
+# kamila [![R-CMD-check](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml) [![test-coverage](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml) [![Codecov test coverage](https://codecov.io/gh/ahfoss/kamila/branch/master/graph/badge.svg)](https://app.codecov.io/gh/ahfoss/kamila) [![lint](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml) [![Shinylive App](https://img.shields.io/badge/Shinylive-Interactive_Demo-blue?logo=r)](https://ahfoss.github.io/kamila/) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/grand-total/kamila)](https://cran.r-project.org/package=kamila) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/kamila)](https://cran.r-project.org/package=kamila)
 
 R package for clustering mixed data. For more information, install the package and run
 
@@ -15,7 +15,15 @@ Update May 11, 2020: Update data.frame calls to be compatible with R v4.x.x
 
 ## Interactive Clustering Horse-Race App
 
-You can launch the interactive mixed-type clustering horse-race application directly from R:
+Explore and benchmark KAMILA against competing mixed-type clustering algorithms (FlexMix, ClustMD, k-prototypes, VarSelLCM, Standard K-Means) interactively:
+
+### [🚀 Launch Live Web App (Client-Side WebAssembly)](https://ahfoss.github.io/kamila/)
+> **No installation required:** Runs 100% client-side in your web browser via **WebR & Shinylive**.
+
+---
+
+### Run Locally in R
+To run the dashboard locally with multi-core parallel acceleration:
 
 ```r
 shiny::runGitHub(
