@@ -67,19 +67,19 @@ run_worker <- function(lib_path, tier_name, runs, seed) {
   if (!is.na(lib_path) && nzchar(lib_path)) {
     .libPaths(c(normalizePath(lib_path, mustWork = TRUE), .libPaths()))
   }
-  
+
   if (!requireNamespace("kamila", quietly = TRUE)) {
     stop("Package 'kamila' could not be loaded from library: ", lib_path)
   }
-  
+
   tier <- TIER_CONFIGS[[tier_name]]
   if (is.null(tier)) {
     stop("Unknown tier: ", tier_name)
   }
-  
+
   set.seed(seed)
   runtimes <- numeric(runs)
-  
+
   for (i in seq_len(runs)) {
     # Generate mixed data
     dat <- kamila::genMixedData(
@@ -93,13 +93,13 @@ run_worker <- function(lib_path, tier_name, runs, seed) {
       conErrLev = 0.2,
       catErrLev = 0.2
     )
-    
+
     conDf <- as.data.frame(dat$conVars)
     catDf <- as.data.frame(lapply(as.data.frame(dat$catVars), factor))
-    
+
     # Clean garbage collection prior to timing
     gc(verbose = FALSE)
-    
+
     t0 <- proc.time()
     res <- kamila::kamila(
       conVar = conDf,
@@ -113,7 +113,7 @@ run_worker <- function(lib_path, tier_name, runs, seed) {
     t_elapsed <- (proc.time() - t0)[3]
     runtimes[i] <- t_elapsed
   }
-  
+
   # Output comma-separated runtimes
   cat(paste(sprintf("%.6f", runtimes), collapse = ","))
 }
@@ -133,13 +133,13 @@ invoke_worker <- function(rscript, script_path, lib_path, tier_name, runs, seed)
   if (!is.na(lib_path) && nzchar(lib_path)) {
     args <- c(args, "--lib", normalizePath(lib_path, mustWork = TRUE))
   }
-  
+
   out <- system2(rscript, args = args, stdout = TRUE, stderr = TRUE)
   out_lines <- out[nzchar(trimws(out))]
   if (length(out_lines) == 0) {
     stop("Worker produced no output. Output was:\n", paste(out, collapse = "\n"))
   }
-  
+
   times_str <- out_lines[length(out_lines)]
   times <- as.numeric(strsplit(times_str, ",")[[1]])
   if (any(is.na(times)) || length(times) != runs) {
@@ -155,25 +155,25 @@ analyze_tier <- function(cand_times, base_times, delta = 0.01, alpha = 0.05) {
   # Null hypothesis: Location(cand) >= (1 - delta) * Location(base)
   # Alternative:     Location(cand) <  (1 - delta) * Location(base) (superior)
   scaled_base <- base_times * (1 - delta)
-  
+
   wt <- wilcox.test(cand_times, scaled_base, alternative = "less", exact = FALSE)
-  
+
   med_base <- median(base_times)
   iqr_base <- IQR(base_times)
   mean_base <- mean(base_times)
   sd_base <- sd(base_times)
-  
+
   med_cand <- median(cand_times)
   iqr_cand <- IQR(cand_times)
   mean_cand <- mean(cand_times)
   sd_cand <- sd(cand_times)
-  
+
   pct_speedup <- (med_base - med_cand) / med_base * 100
   mean_pct_speedup <- (mean_base - mean_cand) / mean_base * 100
-  
+
   p_val <- wt$p.value
   is_superior <- (p_val < alpha)
-  
+
   list(
     n_base = length(base_times),
     n_cand = length(cand_times),
@@ -206,7 +206,7 @@ format_time <- function(val_sec) {
 # ------------------------------------------------------------------------------
 main <- function() {
   args <- commandArgs(trailingOnly = TRUE)
-  
+
   # Parse arguments
   parsed <- list(
     worker = FALSE,
@@ -226,7 +226,7 @@ main <- function() {
     output_md = "",
     verbose = FALSE
   )
-  
+
   i <- 1
   while (i <= length(args)) {
     arg <- args[i]
@@ -278,7 +278,7 @@ main <- function() {
     }
     i <- i + 1
   }
-  
+
   # If running in worker mode, execute and exit immediately
   if (parsed$worker) {
     run_worker(
@@ -289,7 +289,7 @@ main <- function() {
     )
     return(invisible(0))
   }
-  
+
   # --- Coordinator Mode ---
   cat("======================================================================\n")
   cat("KAMILA Algorithm Performance Superiority Testing Suite\n")
@@ -297,14 +297,17 @@ main <- function() {
   cat(sprintf("Superiority Margin (delta) : %.1f%%\n", parsed$delta * 100))
   cat(sprintf("Significance Level (alpha) : %.3f\n", parsed$alpha))
   cat(sprintf("Hypothesis                 : H0: Location(Cand) >= %.3f * Location(Base)\n", 1 - parsed$delta))
-  cat(sprintf("                             H1: Location(Cand) <  %.3f * Location(Base) [Superior]\n", 1 - parsed$delta))
+  cat(sprintf(
+    "                             H1: Location(Cand) <  %.3f * Location(Base) [Superior]\n",
+    1 - parsed$delta
+  ))
   cat(sprintf("Require All Tiers Superior : %s\n", parsed$require_all))
   if (parsed$quick) cat("Mode                       : Quick Smoke Test\n")
   cat("----------------------------------------------------------------------\n\n")
-  
+
   active_tiers <- strsplit(parsed$tiers, "[, ]+")[[1]]
   active_tiers <- active_tiers[nzchar(active_tiers)]
-  
+
   # Identify Rscript and this script's path
   rscript <- file.path(R.home("bin"), "Rscript")
   script_args <- commandArgs(trailingOnly = FALSE)
@@ -314,29 +317,29 @@ main <- function() {
   } else {
     script_path <- "inst/benchmarks/run_superiority_benchmark.R"
   }
-  
+
   # Baseline timings storage
   baseline_results <- list()
   if (nzchar(parsed$baseline_file) && file.exists(parsed$baseline_file)) {
     cat(sprintf("Loading saved baseline timings from: %s\n", parsed$baseline_file))
     baseline_results <- readRDS(parsed$baseline_file)
   }
-  
+
   results <- list()
   all_passed <- TRUE
   any_passed <- FALSE
-  
+
   for (t_name in active_tiers) {
     tier <- TIER_CONFIGS[[t_name]]
     if (is.null(tier)) {
       warning("Unknown tier: ", t_name, ", skipping.")
       next
     }
-    
+
     total_runs <- if (parsed$quick) tier$quick_runs else tier$runs
     cat(sprintf("Executing Tier: %s (N = %s, Target Runs = %d)...\n",
                 tier$name, format(tier$sampSize, big.mark = ","), total_runs))
-    
+
     # 1. Obtain Baseline Timings
     base_times <- NULL
     if (!is.null(baseline_results[[t_name]])) {
@@ -355,12 +358,12 @@ main <- function() {
       cat(sprintf(" Done (Median = %s).\n", format_time(median(base_times))))
       baseline_results[[t_name]] <- base_times
     }
-    
+
     # If only saving baseline, skip candidate
     if (nzchar(parsed$save_baseline) && !nzchar(parsed$cand_lib)) {
       next
     }
-    
+
     # 2. Obtain Candidate Timings
     cat("  -> Running candidate variant...")
     cand_times <- invoke_worker(
@@ -372,13 +375,13 @@ main <- function() {
       seed = parsed$seed + 1000
     )
     cat(sprintf(" Done (Median = %s).\n", format_time(median(cand_times))))
-    
+
     # 3. Statistical Analysis
     analysis <- analyze_tier(cand_times, base_times, delta = parsed$delta, alpha = parsed$alpha)
     analysis$tier_name <- tier$name
     analysis$sampSize <- tier$sampSize
     results[[t_name]] <- analysis
-    
+
     if (analysis$is_superior) {
       any_passed <- TRUE
       cat(sprintf("  -> Result: SUPERIOR (Speedup: %+.1f%%, p-val = %.4e)\n\n",
@@ -389,7 +392,7 @@ main <- function() {
                   analysis$pct_speedup, analysis$p_value))
     }
   }
-  
+
   # Save baseline if requested
   if (nzchar(parsed$save_baseline)) {
     cat(sprintf("Saving baseline measurements to: %s\n", parsed$save_baseline))
@@ -399,67 +402,88 @@ main <- function() {
       return(invisible(0))
     }
   }
-  
+
   # ----------------------------------------------------------------------------
   # Generate Markdown Summary
   # ----------------------------------------------------------------------------
   final_verdict <- if (parsed$require_all) all_passed else any_passed
   verdict_str <- if (final_verdict) "PASSED - SUPERIORITY DEMONSTRATED" else "FAILED - INFERIOR OR EQUIVALENT"
-  
-  md <- c()
-  md <- c(md, "## Algorithm Performance Superiority Test Results")
-  md <- c(md, "")
-  md <- c(md, sprintf("- **Overall Verdict:** %s", if (final_verdict) "**PASS** :white_check_mark:" else "**FAIL** :x:"))
-  md <- c(md, sprintf("- **Superiority Margin ($\\delta$):** %.1f%% faster than baseline required", parsed$delta * 100))
-  md <- c(md, sprintf("- **Statistical Test:** Unpaired Mann-Whitney U test ($H_0: \\text{Location}_{\\text{cand}} \\ge (1 - \\delta) \\cdot \\text{Location}_{\\text{base}}$)"))
-  md <- c(md, sprintf("- **Significance Threshold ($\\alpha$):** %.3f (no multiplicity adjustment)", parsed$alpha))
-  md <- c(md, "")
-  md <- c(md, "| Condition | Sample Size ($N$) | Runs | Baseline Median (IQR) | Candidate Median (IQR) | Median Speedup | $p$-value | Verdict |")
-  md <- c(md, "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
-  
+
+  verdict_badge <- if (final_verdict) "**PASS** :white_check_mark:" else "**FAIL** :x:"
+  test_desc <- paste0(
+    "- **Statistical Test:** Unpaired Mann-Whitney U test ",
+    "($H_0: \\text{Location}_{\\text{cand}} \\ge (1 - \\delta) \\cdot \\text{Location}_{\\text{base}}$)"
+  )
+  table_header <- paste(
+    "| Condition | Sample Size ($N$) | Runs | Baseline Median (IQR) |",
+    "Candidate Median (IQR) | Median Speedup | $p$-value | Verdict |"
+  )
+  table_sep <- paste(
+    "| :--- | :--- | :--- | :--- |",
+    ":--- | :--- | :--- | :--- |"
+  )
+
+  md <- c(
+    "## Algorithm Performance Superiority Test Results",
+    "",
+    sprintf("- **Overall Verdict:** %s", verdict_badge),
+    sprintf("- **Superiority Margin ($\\delta$):** %.1f%% faster than baseline required", parsed$delta * 100),
+    test_desc,
+    sprintf("- **Significance Threshold ($\\alpha$):** %.3f (no multiplicity adjustment)", parsed$alpha),
+    "",
+    table_header,
+    table_sep
+  )
+
   for (t_name in names(results)) {
     res <- results[[t_name]]
     p_str <- if (res$p_value < 1e-4) sprintf("%.2e", res$p_value) else sprintf("%.4f", res$p_value)
     status_icon <- if (res$is_superior) "**SUPERIOR** :white_check_mark:" else "**NOT SUPERIOR** :x:"
     speedup_str <- sprintf("%+.1f%%", res$pct_speedup)
     if (res$is_superior) speedup_str <- paste0("**", speedup_str, "**")
-    
-    row <- sprintf(
-      "| **%s** | %s | %d / %d | %s (%s) | %s (%s) | %s | `%s` | %s |",
-      res$tier_name,
-      format(res$sampSize, big.mark = ","),
-      res$n_base, res$n_cand,
-      format_time(res$med_base), format_time(res$iqr_base),
-      format_time(res$med_cand), format_time(res$iqr_cand),
-      speedup_str,
-      p_str,
-      status_icon
+
+    row <- paste(
+      sprintf(
+        "| **%s** | %s | %d / %d |",
+        res$tier_name,
+        format(res$sampSize, big.mark = ","),
+        res$n_base,
+        res$n_cand
+      ),
+      sprintf(
+        "%s (%s) | %s (%s) |",
+        format_time(res$med_base),
+        format_time(res$iqr_base),
+        format_time(res$med_cand),
+        format_time(res$iqr_cand)
+      ),
+      sprintf("%s | `%s` | %s |", speedup_str, p_str, status_icon)
     )
     md <- c(md, row)
   }
   md <- c(md, "")
-  
+
   md_text <- paste(md, collapse = "\n")
-  
+
   # Print to stdout
   cat("----------------------------------------------------------------------\n")
   cat(md_text, "\n")
   cat("======================================================================\n")
   cat(sprintf("Final Verdict: %s\n", verdict_str))
   cat("======================================================================\n")
-  
+
   # Write to file if requested
   if (nzchar(parsed$output_md)) {
     writeLines(md_text, parsed$output_md)
     cat(sprintf("Wrote report to: %s\n", parsed$output_md))
   }
-  
+
   # Write to GitHub Step Summary if running in GitHub Actions
   step_summary <- Sys.getenv("GITHUB_STEP_SUMMARY", unset = "")
   if (nzchar(step_summary)) {
     write(md_text, file = step_summary, append = TRUE)
   }
-  
+
   # Exit status: 0 if passed, 1 if failed
   if (!final_verdict) {
     quit(status = 1, save = "no")
