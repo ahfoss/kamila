@@ -240,11 +240,11 @@ run_single_fixed_k <- function(m, dat, k) {
       pam_fit <- cluster::pam(gdist, k = k, diss = TRUE)
       memb <- as.integer(pam_fit$clustering)
     } else if (m == "kproto") {
-      kp_fit <- clustMixType::kproto(dat$fullData, k = k, nstart = 3, verbose = FALSE)
+      kp_fit <- clustMixType::kproto(dat$fullData, k = k, nstart = 5, verbose = FALSE)
       memb <- as.integer(kp_fit$cluster)
     } else if (m == "varsellcm") {
       v_fit <- VarSelLCM::VarSelCluster(
-        x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+        x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbKeep = 5, nbcores = 1
       )
       memb <- as.integer(VarSelLCM::fitted(v_fit, type = "partition"))
     } else if (m == "flexmix_multinom") {
@@ -255,10 +255,12 @@ run_single_fixed_k <- function(m, dat, k) {
       cat_mods <- lapply(cat_cols, function(col) {
         flexmix::FLXMRmultinom(stats::as.formula(paste0(col, " ~ 1")))
       })
-      f_fit <- flexmix::flexmix(
+      f_fit <- flexmix::stepFlexmix(
         stats::as.formula(paste0(con_cols[1], " ~ 1")),
         data = dat$fullData,
         k = k,
+        nrep = 5,
+        verbose = FALSE,
         model = c(list(con_mod), cat_mods),
         control = list(iter.max = 25, minprior = 0.05, verbose = 0)
       )
@@ -271,10 +273,12 @@ run_single_fixed_k <- function(m, dat, k) {
       bin_cols <- colnames(cat_dummy)
       con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
       bin_form <- stats::as.formula(paste0("cbind(", paste(bin_cols, collapse = ", "), ") ~ 1"))
-      f_fit <- flexmix::flexmix(
+      f_fit <- flexmix::stepFlexmix(
         stats::as.formula(paste0(con_cols[1], " ~ 1")),
         data = df_comb,
         k = k,
+        nrep = 5,
+        verbose = FALSE,
         model = list(
           flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
           flexmix::FLXMCmvbinary(bin_form)
@@ -336,7 +340,7 @@ run_single_selection <- function(m, dat, true_k) {
         conVar = dat$conVars,
         catFactor = dat$catVars,
         numClust = k_range,
-        numInit = 3,
+        numInit = 5,
         calcNumClust = "ps",
         numPredStrCvRun = 5,
         predStrThresh = 0.6
@@ -378,10 +382,10 @@ run_single_selection <- function(m, dat, true_k) {
         method = "silhouette",
         data = dat$fullData,
         k = k_range,
-        nstart = 2,
+        nstart = 5,
         verbose = FALSE
       )
-      fit_kp <- clustMixType::kproto(dat$fullData, k = val$k_opt, nstart = 2, verbose = FALSE)
+      fit_kp <- clustMixType::kproto(dat$fullData, k = val$k_opt, nstart = 5, verbose = FALSE)
       t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
       ari <- calc_ari(dat$trueID, as.integer(fit_kp$cluster))
       data.frame(
@@ -396,7 +400,7 @@ run_single_selection <- function(m, dat, true_k) {
       )
     } else if (m == "varsellcm") {
       res_v <- VarSelLCM::VarSelCluster(
-        x = dat$fullData, gvals = k_range, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+        x = dat$fullData, gvals = k_range, vbleSelec = FALSE, crit.varsel = "BIC", nbKeep = 5, nbcores = 1
       )
       t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
       memb_v <- as.integer(VarSelLCM::fitted(res_v, type = "partition"))
@@ -430,7 +434,8 @@ run_single_selection <- function(m, dat, true_k) {
         stats::as.formula(paste0(con_cols[1], " ~ 1")),
         data = dat$fullData,
         k = k_range,
-        nrep = 1,
+        nrep = 5,
+        verbose = FALSE,
         model = c(list(con_mod), cat_mods),
         control = list(iter.max = 20, minprior = 0.05, verbose = 0)
       )
@@ -459,7 +464,8 @@ run_single_selection <- function(m, dat, true_k) {
         stats::as.formula(paste0(con_cols[1], " ~ 1")),
         data = df_comb,
         k = k_range,
-        nrep = 1,
+        nrep = 5,
+        verbose = FALSE,
         model = list(
           flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
           flexmix::FLXMCmvbinary(bin_form)
@@ -917,7 +923,7 @@ server <- function(input, output, session) {
           dat$conVars,
           dat$catVars,
           numClust = k,
-          numInit = 3,
+          numInit = 5,
           calcNumClust = "none"
         )$finalMemb)
       }, error = function(e) NULL)
@@ -936,7 +942,7 @@ server <- function(input, output, session) {
     # K-Prototypes
     if ("kproto" %in% selected_methods && isTRUE(has_pkg("clustMixType"))) {
       kp_res <- tryCatch({
-        as.integer(clustMixType::kproto(dat$fullData, k = k, nstart = 2, verbose = FALSE)$cluster)
+        as.integer(clustMixType::kproto(dat$fullData, k = k, nstart = 5, verbose = FALSE)$cluster)
       }, error = function(e) NULL)
       if (!is.null(kp_res)) membs$kproto <- kp_res
     }
@@ -945,7 +951,7 @@ server <- function(input, output, session) {
     if ("varsellcm" %in% selected_methods && isTRUE(has_pkg("VarSelLCM"))) {
       v_res <- tryCatch({
         v_fit <- VarSelLCM::VarSelCluster(
-          x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+          x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbKeep = 5, nbcores = 1
         )
         as.integer(VarSelLCM::fitted(v_fit, type = "partition"))
       }, error = function(e) NULL)
@@ -962,10 +968,12 @@ server <- function(input, output, session) {
         cat_mods <- lapply(cat_cols, function(col) {
           flexmix::FLXMRmultinom(stats::as.formula(paste0(col, " ~ 1")))
         })
-        m <- flexmix::flexmix(
+        m <- flexmix::stepFlexmix(
           stats::as.formula(paste0(con_cols[1], " ~ 1")),
           data = dat$fullData,
           k = k,
+          nrep = 5,
+          verbose = FALSE,
           model = c(list(con_mod), cat_mods),
           control = list(iter.max = 20, minprior = 0.05, verbose = 0)
         )
@@ -984,10 +992,12 @@ server <- function(input, output, session) {
         bin_cols <- colnames(cat_dummy)
         con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
         bin_form <- stats::as.formula(paste0("cbind(", paste(bin_cols, collapse = ", "), ") ~ 1"))
-        m <- flexmix::flexmix(
+        m <- flexmix::stepFlexmix(
           stats::as.formula(paste0(con_cols[1], " ~ 1")),
           data = df_comb,
           k = k,
+          nrep = 5,
+          verbose = FALSE,
           model = list(
             flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
             flexmix::FLXMCmvbinary(bin_form)
@@ -1276,7 +1286,7 @@ server <- function(input, output, session) {
           "fit <- clustMixType::kproto(\n",
           "  x = dat$fullData,\n",
           "  k = %d,\n",
-          "  nstart = 3,\n",
+          "  nstart = 5,\n",
           "  verbose = FALSE\n",
           ")\n",
           "clusters <- fit$cluster\n"
@@ -1293,6 +1303,7 @@ server <- function(input, output, session) {
           "  gvals = %d,\n",
           "  vbleSelec = FALSE,\n",
           "  crit.varsel = \"BIC\",\n",
+          "  nbKeep = 5,\n",
           "  nbcores = 1\n",
           ")\n",
           "clusters <- VarSelLCM::fitted(fit, type = \"partition\")\n"
@@ -1311,10 +1322,11 @@ server <- function(input, output, session) {
           "cat_mods <- lapply(cat_cols, function(col) {\n",
           "  flexmix::FLXMRmultinom(as.formula(paste0(col, \" ~ 1\")))\n",
           "})\n",
-          "fit <- flexmix::flexmix(\n",
+          "fit <- flexmix::stepFlexmix(\n",
           "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
           "  data = dat$fullData,\n",
           "  k = %d,\n",
+          "  nrep = 5,\n",
           "  model = c(list(con_mod), cat_mods),\n",
           "  control = list(iter.max = 25, minprior = 0.05, verbose = 0)\n",
           ")\n",
@@ -1334,10 +1346,11 @@ server <- function(input, output, session) {
           "bin_cols <- colnames(cat_dummy)\n",
           "con_form <- as.formula(paste0(\"cbind(\", paste(con_cols, collapse = \", \"), \") ~ 1\"))\n",
           "bin_form <- as.formula(paste0(\"cbind(\", paste(bin_cols, collapse = \", \"), \") ~ 1\"))\n",
-          "fit <- flexmix::flexmix(\n",
+          "fit <- flexmix::stepFlexmix(\n",
           "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
           "  data = df_comb,\n",
           "  k = %d,\n",
+          "  nrep = 5,\n",
           "  model = list(\n",
           "    flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),\n",
           "    flexmix::FLXMCmvbinary(bin_form)\n",
@@ -1366,7 +1379,7 @@ server <- function(input, output, session) {
           "  conVar = dat$conVars,\n",
           "  catFactor = dat$catVars,\n",
           "  numClust = %s,\n",
-          "  numInit = 3,\n",
+          "  numInit = 5,\n",
           "  calcNumClust = \"ps\",\n",
           "  numPredStrCvRun = 5,\n",
           "  predStrThresh = 0.6\n",
@@ -1398,7 +1411,7 @@ server <- function(input, output, session) {
           "  method = \"silhouette\",\n",
           "  data = dat$fullData,\n",
           "  k = %s,\n",
-          "  nstart = 2,\n",
+          "  nstart = 5,\n",
           "  verbose = FALSE\n",
           ")\n",
           "best_k <- val$k_opt\n"
@@ -1415,6 +1428,7 @@ server <- function(input, output, session) {
           "  gvals = %s,\n",
           "  vbleSelec = FALSE,\n",
           "  crit.varsel = \"BIC\",\n",
+          "  nbKeep = 5,\n",
           "  nbcores = 1\n",
           ")\n",
           "best_k <- fit@model@g\n"
@@ -1437,7 +1451,7 @@ server <- function(input, output, session) {
           "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
           "  data = dat$fullData,\n",
           "  k = %s,\n",
-          "  nrep = 1,\n",
+          "  nrep = 5,\n",
           "  model = c(list(con_mod), cat_mods),\n",
           "  control = list(iter.max = 20, minprior = 0.05, verbose = 0)\n",
           ")\n",
@@ -1462,7 +1476,7 @@ server <- function(input, output, session) {
           "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
           "  data = df_comb,\n",
           "  k = %s,\n",
-          "  nrep = 1,\n",
+          "  nrep = 5,\n",
           "  model = list(\n",
           "    flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),\n",
           "    flexmix::FLXMCmvbinary(bin_form)\n",
