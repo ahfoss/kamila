@@ -23,6 +23,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,13 +34,17 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: Install Shinylive R package
-        run: |
-          Rscript -e 'install.packages("shinylive", repos = "https://cloud.r-project.org")'
+      - name: Install dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::shinylive
+            any::httpuv
 
       - name: Export Shinylive App
         run: |
-          Rscript -e 'shinylive::export(appdir = "inst/shiny/horserace", destdir = "site")'
+          shinylive::export(appdir = "inst/shiny/horserace", destdir = "site")
+        shell: Rscript {0}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
