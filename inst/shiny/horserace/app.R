@@ -70,7 +70,7 @@ calc_ari <- function(true_labels, pred_labels) {
   true_v <- true_v[valid_idx]
   pred_v <- pred_v[valid_idx]
 
-  if (has_pkg("mclust")) {
+  if (isTRUE(has_pkg("mclust"))) {
     ari_res <- tryCatch(mclust::adjustedRandIndex(true_v, pred_v), error = function(e) NA_real_)
     if (!is.null(ari_res) && length(ari_res) == 1 && !is.na(ari_res)) {
       return(as.numeric(ari_res))
@@ -204,7 +204,7 @@ run_single_fixed_k <- function(m, dat, k) {
 
   k <- get_valid_val(k, 4L, min_val = 2)
 
-  if (!has_pkg(m_pkg)) {
+  if (!isTRUE(has_pkg(m_pkg))) {
     return(data.frame(
       Method = m_name,
       Package = m_pkg,
@@ -303,7 +303,7 @@ run_single_selection <- function(m, dat, true_k) {
   m_name <- m_info$name
   m_pkg <- m_info$pkg
 
-  if (!has_pkg(m_pkg)) return(NULL)
+  if (!isTRUE(has_pkg(m_pkg))) return(NULL)
 
   true_k <- get_valid_val(true_k, 4L, min_val = 2)
   k_max_search <- min(10, max(5, true_k + 2))
@@ -891,7 +891,7 @@ server <- function(input, output, session) {
     membs <- list(true = dat$trueID)
 
     # KAMILA
-    if ("kamila" %in% selected_methods && has_pkg("kamila")) {
+    if ("kamila" %in% selected_methods && isTRUE(has_pkg("kamila"))) {
       kam_res <- tryCatch({
         as.integer(kamila::kamila(
           dat$conVars,
@@ -905,7 +905,7 @@ server <- function(input, output, session) {
     }
 
     # Gower + PAM
-    if ("gower_pam" %in% selected_methods && has_pkg("cluster")) {
+    if ("gower_pam" %in% selected_methods && isTRUE(has_pkg("cluster"))) {
       pam_res <- tryCatch({
         g_dist <- cluster::daisy(dat$fullData, metric = "gower")
         as.integer(cluster::pam(g_dist, k = k, diss = TRUE)$clustering)
@@ -914,7 +914,7 @@ server <- function(input, output, session) {
     }
 
     # K-Prototypes
-    if ("kproto" %in% selected_methods && has_pkg("clustMixType")) {
+    if ("kproto" %in% selected_methods && isTRUE(has_pkg("clustMixType"))) {
       kp_res <- tryCatch({
         as.integer(clustMixType::kproto(dat$fullData, k = k, nstart = 2, verbose = FALSE)$cluster)
       }, error = function(e) NULL)
@@ -922,7 +922,7 @@ server <- function(input, output, session) {
     }
 
     # VarSelLCM
-    if ("varsellcm" %in% selected_methods && has_pkg("VarSelLCM")) {
+    if ("varsellcm" %in% selected_methods && isTRUE(has_pkg("VarSelLCM"))) {
       v_res <- tryCatch({
         v_fit <- VarSelLCM::VarSelCluster(
           x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
@@ -933,7 +933,7 @@ server <- function(input, output, session) {
     }
 
     # FlexMix Multinomial
-    if ("flexmix_multinom" %in% selected_methods && has_pkg("flexmix")) {
+    if ("flexmix_multinom" %in% selected_methods && isTRUE(has_pkg("flexmix"))) {
       f_res <- tryCatch({
         con_cols <- colnames(dat$conVars)
         cat_cols <- colnames(dat$catVars)
@@ -955,7 +955,7 @@ server <- function(input, output, session) {
     }
 
     # FlexMix Binary Levels
-    if ("flexmix_binary" %in% selected_methods && has_pkg("flexmix")) {
+    if ("flexmix_binary" %in% selected_methods && isTRUE(has_pkg("flexmix"))) {
       fb_res <- tryCatch({
         con_mat <- safe_scale(dat$conVars)
         cat_dummy <- stats::model.matrix(~ . - 1, data = dat$catVars)
