@@ -48,7 +48,7 @@ Suggests:
     mvtnorm,
     mclust,
     mixtools,
-    MASS
+    MASS,
     pkgload,
     covr
 Config/roxygen2/version: 8.1.0
