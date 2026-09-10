@@ -190,18 +190,6 @@ method_meta <- list(
   flexmix_binary = list(name = "FlexMix (Binary Levels)", pkg = "flexmix")
 )
 
-detected_cores_count <- tryCatch({
-  p_cores <- parallel::detectCores(logical = FALSE)
-  if (is.null(p_cores) || length(p_cores) == 0 || is.na(p_cores[1]) || p_cores[1] < 1) {
-    p_cores <- parallel::detectCores()
-  }
-  if (is.null(p_cores) || length(p_cores) == 0 || is.na(p_cores[1]) || p_cores[1] < 1) {
-    1L
-  } else {
-    as.integer(p_cores[1])
-  }
-}, error = function(e) 1L)
-
 run_single_fixed_k <- function(m, dat, k) {
   m_info <- method_meta[[m]]
   m_name <- m_info$name
@@ -303,7 +291,7 @@ run_single_fixed_k <- function(m, dat, k) {
   })
 }
 
-run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
+run_single_selection <- function(m, dat, true_k) {
   m_info <- method_meta[[m]]
   m_name <- m_info$name
   m_pkg <- m_info$pkg
@@ -317,7 +305,7 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
   t_start <- proc.time()
   tryCatch({
     if (m == "kamila") {
-      kam_args <- list(
+      res_k <- kamila::kamila(
         conVar = dat$conVars,
         catFactor = dat$catVars,
         numClust = k_range,
@@ -326,11 +314,6 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
         numPredStrCvRun = 5,
         predStrThresh = 0.6
       )
-      if ("numCores" %in% names(formals(kamila::kamila))) {
-        num_cores_ps <- if (!is.null(ps_cores) && ps_cores > 1) as.integer(ps_cores) else 1
-        kam_args$numCores <- num_cores_ps
-      }
-      res_k <- do.call(kamila::kamila, kam_args)
       t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
       pred_k <- if (is.list(res_k$nClust)) res_k$nClust$bestNClust else res_k$nClust
       ari <- calc_ari(dat$trueID, res_k$finalMemb)
@@ -484,99 +467,18 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
   })
 }
 
-run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_cores = 4,
-                              cluster_obj = NULL, progress_fn = NULL, ...) {
-  is_webr <- is_webr_env()
+run_benchmark_jobs <- function(method_keys, runner_fn, progress_fn = NULL, ...) {
   n_methods <- length(method_keys)
-  num_cores_val <- get_valid_val(num_cores, 1L, min_val = 1)
-  if (!use_parallel || is_webr || num_cores_val <= 1 || n_methods <= 1) {
-    t_start <- proc.time()
-    res <- vector("list", n_methods)
-    for (i in seq_along(method_keys)) {
-      m <- method_keys[i]
-      if (is.function(progress_fn)) {
-        progress_fn(i, n_methods, method_meta[[m]]$name)
-      }
-      res[[i]] <- runner_fn(m, ...)
-    }
-    t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-    attr(res, "wall_clock_ms") <- t_elapsed
-    return(res)
-  }
-
-  n_workers <- min(n_methods, as.integer(num_cores_val))
-  cl <- if (!is.null(cluster_obj)) cluster_obj else tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
-  is_temp_cl <- is.null(cluster_obj) && !is.null(cl)
-
-  if (is.null(cl)) {
-    t_start <- proc.time()
-    res <- vector("list", n_methods)
-    for (i in seq_along(method_keys)) {
-      m <- method_keys[i]
-      if (is.function(progress_fn)) {
-        progress_fn(i, n_methods, method_meta[[m]]$name)
-      }
-      res[[i]] <- runner_fn(m, ...)
-    }
-    t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-    attr(res, "wall_clock_ms") <- t_elapsed
-    return(res)
-  }
-
-  if (is_temp_cl) {
-    on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
-  }
-
-  args_list <- list(...)
-  worker_exec <- function(m, args) {
-    res <- do.call(runner_fn, c(list(m = m), args))
-    list(m = m, result = res)
-  }
-
-  parallel::clusterExport(
-    cl,
-    varlist = c(
-      "has_pkg", "safe_scale", "calc_ari", "calc_misclass_error",
-      "method_meta", "runner_fn", "args_list", "worker_exec"
-    ),
-    envir = environment()
-  )
-
   t_start <- proc.time()
-  submitted <- min(n_workers, n_methods)
-  for (i in seq_len(submitted)) {
-    parallel:::sendCall(
-      cl[[i]],
-      worker_exec,
-      list(m = method_keys[i], args = args_list)
-    )
-  }
-
-  res_map <- vector("list", n_methods)
-  names(res_map) <- method_keys
-
-  for (i in seq_len(n_methods)) {
-    worker_res <- parallel:::recvOneResult(cl)
-    m_done <- worker_res$value$m
-    res_map[[m_done]] <- worker_res$value$result
-
+  res <- vector("list", n_methods)
+  for (i in seq_along(method_keys)) {
+    m <- method_keys[i]
     if (is.function(progress_fn)) {
-      m_name <- if (m_done %in% names(method_meta)) method_meta[[m_done]]$name else m_done
-      progress_fn(i, n_methods, sprintf("Completed %s", m_name))
+      progress_fn(i, n_methods, method_meta[[m]]$name)
     }
-
-    if (submitted < n_methods) {
-      submitted <- submitted + 1
-      parallel:::sendCall(
-        cl[[worker_res$node]],
-        worker_exec,
-        list(m = method_keys[submitted], args = args_list)
-      )
-    }
+    res[[i]] <- runner_fn(m, ...)
   }
-
   t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-  res <- unname(res_map[method_keys])
   attr(res, "wall_clock_ms") <- t_elapsed
   res
 }
@@ -672,25 +574,6 @@ ui <- fluidPage(
         selected = c(
           "kamila", "gower_pam", "kproto", "varsellcm",
           "flexmix_multinom", "flexmix_binary"
-        )
-      ),
-
-      tags$hr(),
-      tags$h4("Compute & Parallelism", style = "font-weight: 600;"),
-      checkboxInput(
-        "use_parallel",
-        "Enable Multi-Core Parallel Execution",
-        value = TRUE
-      ),
-      conditionalPanel(
-        condition = "input.use_parallel",
-        sliderInput(
-          "num_cores",
-          "Worker Cores:",
-          min = 1,
-          max = detected_cores_count,
-          value = min(4, detected_cores_count),
-          step = 1
         )
       )
     ),
@@ -842,48 +725,8 @@ ui <- fluidPage(
 # ------------------------------------------------------------------------------
 server <- function(input, output, session) {
 
-  # Session-Level Worker Cluster Lifecycle Management
-  session_cluster <- reactiveVal(NULL)
-  current_cluster_size <- reactiveVal(0L)
   fixed_wall_time <- reactiveVal(NULL)
   selection_wall_time <- reactiveVal(NULL)
-
-  get_or_create_cluster <- function(n_workers) {
-    cl <- isolate(session_cluster())
-    cur_size <- isolate(current_cluster_size())
-    if (!is.null(cl) && cur_size == n_workers) {
-      return(cl)
-    }
-    if (!is.null(cl)) {
-      try(parallel::stopCluster(cl), silent = TRUE)
-      session_cluster(NULL)
-      current_cluster_size(0L)
-    }
-    new_cl <- tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
-    if (is.null(new_cl)) return(NULL)
-
-    parallel::clusterEvalQ(new_cl, {
-      suppressPackageStartupMessages({
-        library(kamila)
-        library(cluster)
-        if (requireNamespace("clustMixType", quietly = TRUE)) library(clustMixType)
-        if (requireNamespace("VarSelLCM", quietly = TRUE)) library(VarSelLCM)
-        if (requireNamespace("flexmix", quietly = TRUE)) library(flexmix)
-        if (requireNamespace("mvtnorm", quietly = TRUE)) library(mvtnorm)
-        if (requireNamespace("mclust", quietly = TRUE)) library(mclust)
-      })
-    })
-    session_cluster(new_cl)
-    current_cluster_size(n_workers)
-    new_cl
-  }
-
-  session$onSessionEnded(function() {
-    cl <- isolate(session_cluster())
-    if (!is.null(cl)) {
-      try(parallel::stopCluster(cl), silent = TRUE)
-    }
-  })
 
   output$n_obs_badge <- renderUI({
     val <- if (is.null(input$log_n) || !is.numeric(input$log_n)) 3.0 else input$log_n
@@ -937,31 +780,14 @@ server <- function(input, output, session) {
       names(method_meta)
     }
     k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
-    use_par <- isTRUE(input$use_parallel)
-    n_cores <- get_valid_val(input$num_cores, 1L, min_val = 1)
 
     valid_methods <- intersect(names(method_meta), selected_methods)
     if (length(valid_methods) == 0) {
       return(data.frame(Message = "No techniques selected"))
     }
 
-    msg <- if (use_par && n_cores > 1) {
-      sprintf(
-        "Running Fixed-K Benchmark (Parallel across %d cores)...",
-        min(n_cores, length(valid_methods))
-      )
-    } else {
-      "Running Fixed-K Benchmark (Sequential)..."
-    }
-
-    worker_cl <- if (use_par && n_cores > 1) {
-      get_or_create_cluster(min(n_cores, length(valid_methods)))
-    } else {
-      NULL
-    }
-
     results_list <- withProgress(
-      message = msg,
+      message = "Running Fixed-K Benchmark...",
       detail = "Initializing benchmark...",
       value = 0.05,
       {
@@ -971,12 +797,9 @@ server <- function(input, output, session) {
             detail = sprintf("[%d/%d] %s", cur_idx, total_count, item_desc)
           )
         }
-        run_parallel_jobs(
+        run_benchmark_jobs(
           method_keys = valid_methods,
           runner_fn = run_single_fixed_k,
-          use_parallel = use_par,
-          num_cores = n_cores,
-          cluster_obj = worker_cl,
           progress_fn = progress_cb,
           dat = dat,
           k = k
@@ -999,31 +822,14 @@ server <- function(input, output, session) {
       names(method_meta)
     }
     true_k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
-    use_par <- isTRUE(input$use_parallel)
-    n_cores <- get_valid_val(input$num_cores, 1L, min_val = 1)
 
     valid_methods <- intersect(names(method_meta), selected_methods)
     if (length(valid_methods) == 0) {
       return(data.frame(Message = "No techniques selected"))
     }
 
-    msg <- if (use_par && n_cores > 1) {
-      sprintf(
-        "Running Cluster Selection (Parallel across %d cores)...",
-        min(n_cores, length(valid_methods))
-      )
-    } else {
-      "Running Cluster Selection (Sequential)..."
-    }
-
-    worker_cl <- if (use_par && n_cores > 1) {
-      get_or_create_cluster(min(n_cores, length(valid_methods)))
-    } else {
-      NULL
-    }
-
     results_list <- withProgress(
-      message = msg,
+      message = "Running Cluster Selection (K in 2:10)...",
       detail = "Evaluating candidate cluster counts...",
       value = 0.05,
       {
@@ -1033,17 +839,12 @@ server <- function(input, output, session) {
             detail = sprintf("[%d/%d] %s", cur_idx, total_count, item_desc)
           )
         }
-        ps_cores_arg <- if (use_par && length(valid_methods) == 1) n_cores else 1
-        run_parallel_jobs(
+        run_benchmark_jobs(
           method_keys = valid_methods,
           runner_fn = run_single_selection,
-          use_parallel = use_par,
-          num_cores = n_cores,
-          cluster_obj = worker_cl,
           progress_fn = progress_cb,
           dat = dat,
-          true_k = true_k,
-          ps_cores = ps_cores_arg
+          true_k = true_k
         )
       }
     )
@@ -1176,25 +977,9 @@ server <- function(input, output, session) {
     wall_ms <- fixed_wall_time()
     res <- benchmark_results()
     if (is.null(wall_ms) || is.null(res) || !"Time_ms" %in% names(res)) return(NULL)
-    active_methods <- method_name_map[input$methods]
-    valid_res <- res[!is.na(res$Time_ms) & res$Method %in% active_methods, , drop = FALSE]
-    if (nrow(valid_res) == 0) return(NULL)
-    seq_sum <- sum(valid_res$Time_ms, na.rm = TRUE)
-    speedup <- if (wall_ms > 0) round(seq_sum / wall_ms, 2) else 1.0
     tags$div(
       style = "margin-bottom: 12px; font-size: 0.95rem; color: #495057;",
-      tags$span(tags$strong("Total Wall-Clock Time: "), sprintf("%.1f ms", wall_ms)),
-      tags$span(" | "),
-      tags$span(tags$strong("Sequential Sum of Runtimes: "), sprintf("%.1f ms", seq_sum)),
-      if (speedup > 1.05) {
-        tags$span(
-          class = "badge bg-success",
-          style = "margin-left: 8px; font-size: 0.85rem; padding: 4px 8px;",
-          sprintf("%.2fx Parallel Speedup", speedup)
-        )
-      } else {
-        NULL
-      }
+      tags$span(tags$strong("Total Execution Time: "), sprintf("%.1f ms", wall_ms))
     )
   })
 
@@ -1248,25 +1033,9 @@ server <- function(input, output, session) {
     wall_ms <- selection_wall_time()
     res <- selection_results()
     if (is.null(wall_ms) || is.null(res) || !"Time_ms" %in% names(res)) return(NULL)
-    active_methods <- method_name_map[input$methods]
-    valid_res <- res[!is.na(res$Time_ms) & res$Method %in% active_methods, , drop = FALSE]
-    if (nrow(valid_res) == 0) return(NULL)
-    seq_sum <- sum(valid_res$Time_ms, na.rm = TRUE)
-    speedup <- if (wall_ms > 0) round(seq_sum / wall_ms, 2) else 1.0
     tags$div(
       style = "margin-bottom: 12px; font-size: 0.95rem; color: #495057;",
-      tags$span(tags$strong("Total Wall-Clock Time: "), sprintf("%.1f ms", wall_ms)),
-      tags$span(" | "),
-      tags$span(tags$strong("Sequential Sum of Runtimes: "), sprintf("%.1f ms", seq_sum)),
-      if (speedup > 1.05) {
-        tags$span(
-          class = "badge bg-success",
-          style = "margin-left: 8px; font-size: 0.85rem; padding: 4px 8px;",
-          sprintf("%.2fx Parallel Speedup", speedup)
-        )
-      } else {
-        NULL
-      }
+      tags$span(tags$strong("Total Execution Time: "), sprintf("%.1f ms", wall_ms))
     )
   })
 
@@ -1549,11 +1318,6 @@ server <- function(input, output, session) {
     k_range_str <- sprintf("2:%d", k_max)
 
     if (is.null(m) || m == "kamila") {
-      cores_snippet <- if (isTRUE(input$use_parallel) && !is.null(input$num_cores) && input$num_cores > 1) {
-        sprintf(",\n  numCores = %d", as.integer(input$num_cores))
-      } else {
-        ""
-      }
       sprintf(
         paste0(
           "# --- KAMILA Cluster Count Selection (Prediction Strength) ---\n",
@@ -1565,12 +1329,11 @@ server <- function(input, output, session) {
           "  numInit = 3,\n",
           "  calcNumClust = \"ps\",\n",
           "  numPredStrCvRun = 5,\n",
-          "  predStrThresh = 0.6%s\n",
+          "  predStrThresh = 0.6\n",
           ")\n",
           "best_k <- fit$nClust$bestNClust\n"
         ),
-        k_range_str,
-        cores_snippet
+        k_range_str
       )
     } else if (m == "gower_pam") {
       sprintf(
@@ -1710,14 +1473,12 @@ server <- function(input, output, session) {
       Property = c(
         "R Version",
         "Platform / Architecture",
-        "Client Hardware Cores",
         "Execution Engine",
         "Hosting Architecture"
       ),
       Value = c(
         R.version.string,
         R.version$platform,
-        as.character(parallel::detectCores(logical = FALSE)),
         if (is_webr) "WebR / WebAssembly (Client-Side in Browser)" else "Native R Runtime",
         if (is_webr) "Shinylive (Zero Server / Static GitHub Pages)" else "Standard Shiny Session"
       ),
