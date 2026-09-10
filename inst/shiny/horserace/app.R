@@ -285,7 +285,7 @@ run_single_fixed_k <- function(m, dat, k) {
       Time_ms = NA,
       ARI = NA,
       Error_Rate = NA,
-      Status = paste("Error:", substr(e$message, 1, 28)),
+      Status = paste0("Error: ", conditionMessage(e)),
       stringsAsFactors = FALSE
     )
   })
@@ -459,7 +459,7 @@ run_single_selection <- function(m, dat, true_k) {
       Package = m_pkg,
       True_K = true_k,
       Predicted_K = NA,
-      Criterion = paste("Error:", substr(e$message, 1, 24)),
+      Criterion = paste0("Error: ", conditionMessage(e)),
       ARI = NA,
       Time_ms = NA,
       stringsAsFactors = FALSE
@@ -507,7 +507,15 @@ ui <- fluidPage(
 
   titlePanel(
     tags$div(
-      tags$h2("Mixed-Type Clustering Horse-Race", style = "margin-bottom: 2px; font-weight: 700;"),
+      tags$div(
+        style = "display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;",
+        tags$h2("Mixed-Type Clustering Horse-Race", style = "margin-bottom: 2px; font-weight: 700;"),
+        tags$span(
+          class = "badge bg-primary",
+          style = "font-size: 0.85rem; padding: 6px 10px;",
+          "Build: 2026-09-10 (v0.1.3-diag-sequential)"
+        )
+      ),
       tags$p(
         "Interactive benchmark comparing mixed-data clustering techniques.",
         style = "color: #6c757d; font-size: 1.05rem;"
@@ -575,7 +583,9 @@ ui <- fluidPage(
           "kamila", "gower_pam", "kproto", "varsellcm",
           "flexmix_multinom", "flexmix_binary"
         )
-      )
+      ),
+      tags$hr(),
+      uiOutput("diag_sidebar_box")
     ),
 
     mainPanel(
@@ -586,6 +596,7 @@ ui <- fluidPage(
         tabPanel(
           "Fixed-K Benchmark",
           tags$br(),
+          uiOutput("diag_data_box"),
           tags$div(
             class = "alert alert-info",
             "Evaluate ARI (Adjusted Rand Index), misclassification error, and runtime for a fixed number of clusters."
@@ -712,6 +723,8 @@ ui <- fluidPage(
           tags$br(),
           tags$h4("Runtime Environment & Specs", style = "font-weight: 600;"),
           tableOutput("env_info_table"),
+          tags$h4("System & Dataset Diagnostics", style = "font-weight: 600; margin-top: 20px;"),
+          tableOutput("diag_env_table"),
           tags$h4("Package Versions & Availability", style = "font-weight: 600; margin-top: 20px;"),
           tableOutput("pkg_version_table")
         )
@@ -1466,6 +1479,59 @@ server <- function(input, output, session) {
     )
   })
 
+  # ----------------------------------------------------------------------------
+  # Diagnostics & Runtime Telemetry
+  # ----------------------------------------------------------------------------
+  output$diag_sidebar_box <- renderUI({
+    dat <- sim_data()
+    n_rows <- if (!is.null(dat$fullData)) nrow(dat$fullData) else 0L
+    p_con <- if (!is.null(dat$conVars)) ncol(dat$conVars) else 0L
+    p_cat <- if (!is.null(dat$catVars)) ncol(dat$catVars) else 0L
+    k_cnt <- if (!is.null(dat$trueID)) length(unique(dat$trueID)) else 0L
+
+    is_ok <- n_rows > 0 && p_con > 0 && p_cat > 0 && k_cnt > 0
+    bg_style <- if (is_ok) {
+      "background: #f8f9fa; border: 1px solid #ced4da;"
+    } else {
+      "background: #f8d7da; border: 1px solid #f5c6cb;"
+    }
+
+    tags$div(
+      style = paste0("padding: 8px 10px; border-radius: 6px; font-size: 0.82rem; ", bg_style),
+      tags$div(tags$strong("Data Generator Status:")),
+      tags$div(sprintf("Obs (N): %s | Features: %d Con / %d Cat", format(n_rows, big.mark = ","), p_con, p_cat)),
+      tags$div(sprintf("True Clusters: %d | Status: %s", k_cnt, if (is_ok) "Ready" else "UNINITIALIZED"))
+    )
+  })
+
+  output$diag_data_box <- renderUI({
+    dat <- sim_data()
+    n_rows <- if (!is.null(dat$fullData)) nrow(dat$fullData) else 0L
+    p_con <- if (!is.null(dat$conVars)) ncol(dat$conVars) else 0L
+    p_cat <- if (!is.null(dat$catVars)) ncol(dat$catVars) else 0L
+    k_cnt <- if (!is.null(dat$trueID)) length(unique(dat$trueID)) else 0L
+
+    is_ok <- n_rows > 0 && p_con > 0 && p_cat > 0 && k_cnt > 0
+    if (!is_ok) {
+      tags$div(
+        class = "alert alert-danger",
+        tags$strong("Diagnostic Warning: "),
+        "The generated dataset is currently empty or uninitialized (N = 0). ",
+        "Please check the simulation settings."
+      )
+    } else {
+      tags$div(
+        class = "alert alert-light border",
+        style = "padding: 8px 12px; margin-bottom: 12px; font-size: 0.88rem; color: #495057;",
+        tags$strong("Live Data State: "),
+        sprintf(
+          "N = %s observations, %d continuous + %d categorical variables, True K = %d clusters.",
+          format(n_rows, big.mark = ","), p_con, p_cat, k_cnt
+        )
+      )
+    }
+  })
+
   # Environment Information
   output$env_info_table <- renderTable({
     is_webr <- exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1"
@@ -1481,6 +1547,37 @@ server <- function(input, output, session) {
         R.version$platform,
         if (is_webr) "WebR / WebAssembly (Client-Side in Browser)" else "Native R Runtime",
         if (is_webr) "Shinylive (Zero Server / Static GitHub Pages)" else "Standard Shiny Session"
+      ),
+      stringsAsFactors = FALSE
+    )
+  }, striped = TRUE, bordered = TRUE)
+
+  # Live System & Dataset Diagnostics
+  output$diag_env_table <- renderTable({
+    dat <- sim_data()
+    n_rows <- if (!is.null(dat$fullData)) nrow(dat$fullData) else 0L
+    p_con <- if (!is.null(dat$conVars)) ncol(dat$conVars) else 0L
+    p_cat <- if (!is.null(dat$catVars)) ncol(dat$catVars) else 0L
+    k_cnt <- if (!is.null(dat$trueID)) length(unique(dat$trueID)) else 0L
+
+    data.frame(
+      Telemetry_Item = c(
+        "WebAssembly / WebR Environment",
+        "Dataset Row Count (N)",
+        "Continuous Variables Count",
+        "Categorical Variables Count",
+        "Ground Truth Clusters Count",
+        "Data Frame Memory Size",
+        "Diagnostic Timestamp (UTC)"
+      ),
+      Value = c(
+        as.character(is_webr_env()),
+        as.character(n_rows),
+        as.character(p_con),
+        as.character(p_cat),
+        as.character(k_cnt),
+        if (!is.null(dat$fullData)) format(object.size(dat$fullData), units = "auto") else "0 B",
+        format(Sys.time(), "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
       ),
       stringsAsFactors = FALSE
     )
