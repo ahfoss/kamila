@@ -83,6 +83,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// calcCatLogLiks
+NumericMatrix calcCatLogLiks(IntegerMatrix catFactorNum, NumericVector catWeights, List logProbsCond_i);
+RcppExport SEXP _kamila_calcCatLogLiks(SEXP catFactorNumSEXP, SEXP catWeightsSEXP, SEXP logProbsCond_iSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type catFactorNum(catFactorNumSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type catWeights(catWeightsSEXP);
+    Rcpp::traits::input_parameter< List >::type logProbsCond_i(logProbsCond_iSEXP);
+    rcpp_result_gen = Rcpp::wrap(calcCatLogLiks(catFactorNum, catWeights, logProbsCond_i));
+    return rcpp_result_gen;
+END_RCPP
+}
 // aggregateMeans
 NumericMatrix aggregateMeans(NumericMatrix conVar, IntegerVector membNew, int kk);
 RcppExport SEXP _kamila_aggregateMeans(SEXP conVarSEXP, SEXP membNewSEXP, SEXP kkSEXP) {
@@ -108,6 +121,36 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type catBw(catBwSEXP);
     Rcpp::traits::input_parameter< int >::type kk(kkSEXP);
     rcpp_result_gen = Rcpp::wrap(jointTabSmoothedList(catFactorNum, membNew, numLev, catBw, kk));
+    return rcpp_result_gen;
+END_RCPP
+}
+// updateLogProbs
+List updateLogProbs(IntegerMatrix catFactorNum, IntegerVector membNew, IntegerVector numLev, double catBw, int kk);
+RcppExport SEXP _kamila_updateLogProbs(SEXP catFactorNumSEXP, SEXP membNewSEXP, SEXP numLevSEXP, SEXP catBwSEXP, SEXP kkSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerMatrix >::type catFactorNum(catFactorNumSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type membNew(membNewSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type numLev(numLevSEXP);
+    Rcpp::traits::input_parameter< double >::type catBw(catBwSEXP);
+    Rcpp::traits::input_parameter< int >::type kk(kkSEXP);
+    rcpp_result_gen = Rcpp::wrap(updateLogProbs(catFactorNum, membNew, numLev, catBw, kk));
+    return rcpp_result_gen;
+END_RCPP
+}
+// interpRadialKde
+NumericVector interpRadialKde(NumericVector y, double maxEval, int pdim, NumericVector evalPoints, bool takeLog);
+RcppExport SEXP _kamila_interpRadialKde(SEXP ySEXP, SEXP maxEvalSEXP, SEXP pdimSEXP, SEXP evalPointsSEXP, SEXP takeLogSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type maxEval(maxEvalSEXP);
+    Rcpp::traits::input_parameter< int >::type pdim(pdimSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type evalPoints(evalPointsSEXP);
+    Rcpp::traits::input_parameter< bool >::type takeLog(takeLogSEXP);
+    rcpp_result_gen = Rcpp::wrap(interpRadialKde(y, maxEval, pdim, evalPoints, takeLog));
     return rcpp_result_gen;
 END_RCPP
 }

@@ -19,21 +19,41 @@ NumericMatrix dptm(
  ,int nn
 )
 {
-  NumericMatrix outMat(nn,kkMean);
+  NumericMatrix outMat(nn, kkMean);
+  const double* p_pts = pts.begin();
+  const double* p_means = myMeans.begin();
+  const double* p_wgts = wgts.begin();
+  double* p_out = outMat.begin();
 
-  for (int i=0; i < nn; i++){
-    for (int j=0; j<kkMean; j++){
-      double distij2 = 0;
-      for (int p=0; p<ppDim; p++){
-        distij2 += pow(
-          wgts[p] * (pts(i,p) - myMeans(j,p))
-         ,2
-        );
+  for (int j = 0; j < kkMean; ++j) {
+    double* out_col = p_out + j * nn;
+    std::fill(out_col, out_col + nn, 0.0);
+
+    for (int p = 0; p < ppDim; ++p) {
+      double w = p_wgts[p];
+      if (w == 0.0) continue;
+      double m = p_means[j + p * kkMean];
+      const double* pts_col = p_pts + p * nn;
+
+      if (w == 1.0) {
+        for (int i = 0; i < nn; ++i) {
+          double diff = pts_col[i] - m;
+          out_col[i] += diff * diff;
+        }
+      } else {
+        for (int i = 0; i < nn; ++i) {
+          double diff = w * (pts_col[i] - m);
+          out_col[i] += diff * diff;
+        }
       }
-      outMat(i,j) = sqrt(distij2);
+    }
+
+    for (int i = 0; i < nn; ++i) {
+      out_col[i] = std::sqrt(out_col[i]);
     }
   }
-  return(outMat);
+
+  return outMat;
 }
 
 // [[Rcpp::export]]
@@ -41,13 +61,17 @@ NumericVector rowMax( NumericMatrix inMat )
 {
   int nn = inMat.nrow(), pp = inMat.ncol();
   NumericVector outVec(nn);
+  const double* p_in = inMat.begin();
+  double* p_out = outVec.begin();
 
   for (int i=0; i<nn; i++) {
-    outVec[i] = inMat(i,0);
-    // note j starts at 1 not zero
-    for (int j=1; j<pp; j++) {
-      if (inMat(i,j) > outVec[i]) {
-        outVec[i] = inMat(i,j);
+    p_out[i] = p_in[i];
+  }
+  for (int j=1; j<pp; j++) {
+    const double* col_ptr = p_in + j * nn;
+    for (int i=0; i<nn; i++) {
+      if (col_ptr[i] > p_out[i]) {
+        p_out[i] = col_ptr[i];
       }
     }
   }
@@ -59,13 +83,17 @@ NumericVector rowMin( NumericMatrix inMat )
 {
   int nn = inMat.nrow(), pp = inMat.ncol();
   NumericVector outVec(nn);
+  const double* p_in = inMat.begin();
+  double* p_out = outVec.begin();
 
   for (int i=0; i<nn; i++) {
-    outVec[i] = inMat(i,0);
-    // note j starts at 1 not zero
-    for (int j=1; j<pp; j++) {
-      if (inMat(i,j) < outVec[i]) {
-        outVec[i] = inMat(i,j);
+    p_out[i] = p_in[i];
+  }
+  for (int j=1; j<pp; j++) {
+    const double* col_ptr = p_in + j * nn;
+    for (int i=0; i<nn; i++) {
+      if (col_ptr[i] < p_out[i]) {
+        p_out[i] = col_ptr[i];
       }
     }
   }
@@ -77,13 +105,21 @@ NumericVector rowMaxInds( NumericMatrix inMat )
 {
   int nn = inMat.nrow(), pp = inMat.ncol();
   NumericVector outVec(nn);
+  std::vector<double> maxVals(nn);
+  const double* p_in = inMat.begin();
+  double* p_out = outVec.begin();
 
   for (int i=0; i<nn; i++) {
-    outVec[i] = 1;
-    // note j starts at 1 not zero
-    for (int j=1; j<pp; j++) {
-      if (inMat(i,j) > inMat(i,outVec[i]-1)) {
-        outVec[i] = j+1;
+    p_out[i] = 1.0;
+    maxVals[i] = p_in[i];
+  }
+  for (int j=1; j<pp; j++) {
+    const double* col_ptr = p_in + j * nn;
+    double colIdx = j + 1.0;
+    for (int i=0; i<nn; i++) {
+      if (col_ptr[i] > maxVals[i]) {
+        maxVals[i] = col_ptr[i];
+        p_out[i] = colIdx;
       }
     }
   }
@@ -178,6 +214,90 @@ List getIndividualLogProbs(
  */
 
 // [[Rcpp::export]]
+NumericMatrix calcCatLogLiks(
+  IntegerMatrix catFactorNum
+ ,NumericVector catWeights
+ ,List logProbsCond_i
+)
+{
+  int qq = catWeights.size();
+  int nn = catFactorNum.nrow();
+  NumericMatrix logProbs0 = logProbsCond_i[0];
+  int kk = logProbs0.nrow();
+
+  NumericMatrix outMat(nn, kk);
+  double* p_out = outMat.begin();
+  const int* p_cat = catFactorNum.begin();
+
+  // Pre-calculate weighted lookups for each q: table of size [nlev * kk]
+  std::vector<std::vector<double>> weightedTabs(qq);
+  for (int q = 0; q < qq; ++q) {
+    double w = catWeights[q];
+    NumericMatrix mat = logProbsCond_i[q];
+    int nlev = mat.ncol();
+    weightedTabs[q].resize(kk * nlev);
+    const double* lp = mat.begin();
+    for (int lev = 0; lev < nlev; ++lev) {
+      for (int cl = 0; cl < kk; ++cl) {
+        weightedTabs[q][lev * kk + cl] = w * lp[cl + lev * kk];
+      }
+    }
+  }
+
+  std::vector<double*> out_cols(kk);
+  for (int cl = 0; cl < kk; ++cl) {
+    out_cols[cl] = p_out + cl * nn;
+  }
+
+  for (int q = 0; q < qq; ++q) {
+    if (catWeights[q] == 0.0) continue;
+    const int* q_col = p_cat + q * nn;
+    const double* w_tab = weightedTabs[q].data();
+
+    if (kk == 4) {
+      double* c0 = out_cols[0];
+      double* c1 = out_cols[1];
+      double* c2 = out_cols[2];
+      double* c3 = out_cols[3];
+      for (int i = 0; i < nn; ++i) {
+        const double* w_row = w_tab + (q_col[i] - 1) * 4;
+        c0[i] += w_row[0];
+        c1[i] += w_row[1];
+        c2[i] += w_row[2];
+        c3[i] += w_row[3];
+      }
+    } else if (kk == 2) {
+      double* c0 = out_cols[0];
+      double* c1 = out_cols[1];
+      for (int i = 0; i < nn; ++i) {
+        const double* w_row = w_tab + (q_col[i] - 1) * 2;
+        c0[i] += w_row[0];
+        c1[i] += w_row[1];
+      }
+    } else if (kk == 3) {
+      double* c0 = out_cols[0];
+      double* c1 = out_cols[1];
+      double* c2 = out_cols[2];
+      for (int i = 0; i < nn; ++i) {
+        const double* w_row = w_tab + (q_col[i] - 1) * 3;
+        c0[i] += w_row[0];
+        c1[i] += w_row[1];
+        c2[i] += w_row[2];
+      }
+    } else {
+      for (int i = 0; i < nn; ++i) {
+        const double* w_row = w_tab + (q_col[i] - 1) * kk;
+        for (int cl = 0; cl < kk; ++cl) {
+          out_cols[cl][i] += w_row[cl];
+        }
+      }
+    }
+  }
+
+  return outMat;
+}
+
+// [[Rcpp::export]]
 NumericMatrix aggregateMeans(
   NumericMatrix conVar
  ,IntegerVector membNew
@@ -185,19 +305,25 @@ NumericMatrix aggregateMeans(
 )
 {
   int pp = conVar.ncol(), nn = conVar.nrow();
-  NumericVector countVec(kk);
-  NumericMatrix outMat(kk,pp);
-
-  for (int n=0; n<nn; n++) {
-    countVec[membNew[n]-1] += 1;
-    for (int p=0; p<pp; p++) {
-      outMat(membNew[n]-1,p) += conVar(n,p);
-    }
+  std::vector<double> countVec(kk, 0.0);
+  const int* p_memb = membNew.begin();
+  for (int n = 0; n < nn; ++n) {
+    countVec[p_memb[n] - 1] += 1.0;
   }
-  for (int k=0; k<kk; k++) {
-    if (countVec[k] != 0) {
-      for (int p=0; p<pp; p++) {
-        outMat(k,p) /= countVec[k];
+
+  NumericMatrix outMat(kk, pp);
+  double* p_out = outMat.begin();
+  const double* p_con = conVar.begin();
+
+  for (int p = 0; p < pp; ++p) {
+    const double* col_ptr = p_con + p * nn;
+    double* out_col = p_out + p * kk;
+    for (int n = 0; n < nn; ++n) {
+      out_col[p_memb[n] - 1] += col_ptr[n];
+    }
+    for (int k = 0; k < kk; ++k) {
+      if (countVec[k] != 0.0) {
+        out_col[k] /= countVec[k];
       }
     }
   }
@@ -318,10 +444,222 @@ List jointTabSmoothedList(
     );
     if (catBw != 0) {
       outList(q) = smooth2dTable(qthTabRaw,catBw,nn);
+    } else {
+      NumericMatrix numTab(kk, numLev[q]);
+      for (int i = 0; i < kk; ++i) {
+        for (int j = 0; j < numLev[q]; ++j) {
+          numTab(i, j) = qthTabRaw(i, j);
+        }
+      }
+      outList(q) = numTab;
     }
   }
 
   return(outList);
+}
+
+// [[Rcpp::export]]
+List updateLogProbs(
+  IntegerMatrix catFactorNum
+ ,IntegerVector membNew
+ ,IntegerVector numLev
+ ,double catBw
+ ,int kk
+)
+{
+  int qq = catFactorNum.ncol();
+  int nn = catFactorNum.nrow();
+  const int* p_memb = membNew.begin();
+  const int* p_cat = catFactorNum.begin();
+
+  List outList(qq);
+
+  for (int q = 0; q < qq; ++q) {
+    int nlev = numLev[q];
+    const int* q_col = p_cat + q * nn;
+
+    // 1. Tabulate
+    std::vector<int> rawTab(kk * nlev, 0);
+    for (int i = 0; i < nn; ++i) {
+      int row = p_memb[i] - 1;
+      int col = q_col[i] - 1;
+      rawTab[row + col * kk] += 1;
+    }
+
+    // 2. Smooth 2D table
+    std::vector<double> outMat(kk * nlev, 0.0);
+    if (catBw != 0.0) {
+      std::vector<double> midMat(kk * nlev, 0.0);
+      std::vector<int> colSums(nlev, 0);
+      for (int j = 0; j < nlev; ++j) {
+        for (int i = 0; i < kk; ++i) {
+          colSums[j] += rawTab[i + j * kk];
+        }
+      }
+
+      double bw_div_k = (kk > 1) ? (catBw / (kk - 1.0)) : 0.0;
+      double one_minus_bw = 1.0 - catBw;
+      for (int j = 0; j < nlev; ++j) {
+        for (int i = 0; i < kk; ++i) {
+          int offCounts1 = colSums[j] - rawTab[i + j * kk];
+          midMat[i + j * kk] = one_minus_bw * rawTab[i + j * kk] + bw_div_k * offCounts1;
+        }
+      }
+
+      std::vector<double> rowSums(kk, 0.0);
+      for (int j = 0; j < nlev; ++j) {
+        for (int i = 0; i < kk; ++i) {
+          rowSums[i] += midMat[i + j * kk];
+        }
+      }
+
+      double bw_div_lev = (nlev > 1) ? (catBw / (nlev - 1.0)) : 0.0;
+      for (int j = 0; j < nlev; ++j) {
+        for (int i = 0; i < kk; ++i) {
+          double offCounts2 = rowSums[i] - midMat[i + j * kk];
+          outMat[i + j * kk] = one_minus_bw * midMat[i + j * kk] + bw_div_lev * offCounts2;
+        }
+      }
+    } else {
+      for (size_t idx = 0; idx < rawTab.size(); ++idx) {
+        outMat[idx] = static_cast<double>(rawTab[idx]);
+      }
+    }
+
+    // 3. Normalize by rowSums and take log
+    NumericMatrix logProbMat(kk, nlev);
+    std::vector<double> finalRowSums(kk, 0.0);
+    for (int j = 0; j < nlev; ++j) {
+      for (int i = 0; i < kk; ++i) {
+        finalRowSums[i] += outMat[i + j * kk];
+      }
+    }
+
+    for (int j = 0; j < nlev; ++j) {
+      for (int i = 0; i < kk; ++i) {
+        double denom = finalRowSums[i];
+        logProbMat(i, j) = (denom > 0.0) ? std::log(outMat[i + j * kk] / denom) : R_NegInf;
+      }
+    }
+
+    outList[q] = logProbMat;
+  }
+
+  return(outList);
+}
+
+// [[Rcpp::export]]
+NumericVector interpRadialKde(
+  NumericVector y,
+  double maxEval,
+  int pdim,
+  NumericVector evalPoints,
+  bool takeLog = false
+)
+{
+  int m = 401;
+  double h = (maxEval > 0.0) ? (maxEval / (m - 1.0)) : 1.0;
+  std::vector<double> x(m);
+  for (int i = 0; i < m; ++i) {
+    x[i] = i * h;
+  }
+
+  // 1. remove any zero and negative density estimates
+  std::vector<double> newY(m);
+  double minPos = 1e300;
+  for (int i = 0; i < m; ++i) {
+    if (y[i] > 0.0 && y[i] < minPos) minPos = y[i];
+  }
+  for (int i = 0; i < m; ++i) {
+    newY[i] = (y[i] > 0.0) ? y[i] : (minPos / 100.0);
+  }
+
+  // 2. at bottom 5th percentile, replace with line through (0,0) and (q05, f(q05))
+  // For 401 equally spaced points from 0, index 21 (0-based 20) is 5th percentile
+  // coordsLtQ05 is 0..19, maxPt is 19
+  double slope = (x[19] > 0.0) ? (newY[19] / x[19]) : 0.0;
+  for (int i = 0; i < 20; ++i) {
+    newY[i] = x[i] * slope;
+  }
+
+  // 3. radial Jacobian transformation; up to proportionality constant
+  std::vector<double> radY(m);
+  for (int i = 1; i < m; ++i) {
+    radY[i] = newY[i] / std::pow(x[i], pdim - 1);
+  }
+  radY[0] = radY[1];
+
+  // 4. replace densities over MAXDENS with MAXDENS (MAXDENS = 1.0)
+  double sumRadY = 0.0;
+  for (int i = 0; i < m; ++i) {
+    if (radY[i] > 1.0) radY[i] = 1.0;
+    sumRadY += radY[i];
+  }
+
+  // 5. normalize to area 1
+  double minDensR = 1e300;
+  std::vector<double> densR(m);
+  double normFactor = h * sumRadY;
+  for (int i = 0; i < m; ++i) {
+    densR[i] = (normFactor > 0.0) ? (radY[i] / normFactor) : 0.0;
+    if (densR[i] < minDensR) minDensR = densR[i];
+  }
+
+  std::vector<double> diffDensR(m - 1);
+  for (int i = 0; i < m - 1; ++i) {
+    diffDensR[i] = densR[i + 1] - densR[i];
+  }
+
+  // 6. linear interpolation at evalPoints with rule 1:2 and pmax(..., min(densR))
+  int nEval = evalPoints.size();
+  NumericVector kdes(nEval);
+  const double* p_eval = evalPoints.begin();
+  double* p_kdes = kdes.begin();
+
+  double inv_h = (h > 0.0) ? (1.0 / h) : 0.0;
+  if (takeLog) {
+    double logVal0 = std::log((densR[0] > minDensR) ? densR[0] : minDensR);
+    double logValMax = std::log((densR[m - 1] > minDensR) ? densR[m - 1] : minDensR);
+    for (int i = 0; i < nEval; ++i) {
+      double u = p_eval[i];
+      if (u <= 0.0) {
+        p_kdes[i] = logVal0;
+      } else if (u >= maxEval) {
+        p_kdes[i] = logValMax;
+      } else {
+        double pos = u * inv_h;
+        int idx = static_cast<int>(pos);
+        if (idx >= m - 1) idx = m - 2;
+        double frac = pos - idx;
+        double val = densR[idx] + frac * diffDensR[idx];
+        p_kdes[i] = std::log((val > minDensR) ? val : minDensR);
+      }
+    }
+  } else {
+    double val0 = (densR[0] > minDensR) ? densR[0] : minDensR;
+    double valMax = (densR[m - 1] > minDensR) ? densR[m - 1] : minDensR;
+    for (int i = 0; i < nEval; ++i) {
+      double u = p_eval[i];
+      if (u <= 0.0) {
+        p_kdes[i] = val0;
+      } else if (u >= maxEval) {
+        p_kdes[i] = valMax;
+      } else {
+        double pos = u * inv_h;
+        int idx = static_cast<int>(pos);
+        if (idx >= m - 1) idx = m - 2;
+        double frac = pos - idx;
+        double val = densR[idx] + frac * diffDensR[idx];
+        p_kdes[i] = (val > minDensR) ? val : minDensR;
+      }
+    }
+  }
+
+  if (evalPoints.hasAttribute("dim")) {
+    kdes.attr("dim") = evalPoints.attr("dim");
+  }
+
+  return kdes;
 }
 
 /* Pseudocode & Note: calcPsCpp

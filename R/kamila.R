@@ -246,7 +246,7 @@ calcSinglePsCvRun <- function(
 #' @param wgts A Px1 vector of variable weights
 #' @return A MxP matrix of distances
 dptmCpp <- function(pts, myMeans, wgts) {
-  pts <- as.matrix(pts)
+  if (!is.matrix(pts)) pts <- as.matrix(pts)
   ppDim <- ncol(pts)
   if (ppDim != ncol(myMeans)) stop("Dimensionality of pts and myMeans must be equal")
   if (ppDim != length(wgts)) stop("Dimensionality of pts must equal number of weights")
@@ -281,17 +281,29 @@ dptmCpp <- function(pts, myMeans, wgts) {
 # pdim is the number of continuous variables used
 # returnFun causes a resampling function to be returned
 #' @importFrom stats bw.nrd0 approxfun quantile
-radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
+radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE, takeLog = FALSE) {
   MAXDENS <- 1
   # Note using a chosen constant for bw reduces time by about 7%
   radialBW <- bw.nrd0(radii)
+  maxEval <- max(evalPoints)
   radKDE <- bkde(
     x = radii,
     kernel = "normal",
     bandwidth = radialBW
     #   ,range.x = c(0, max(radii))
-    , range.x = c(0, max(evalPoints))
+    , range.x = c(0, maxEval)
   )
+
+  if (!returnFun) {
+    kdes <- interpRadialKde(
+      y = radKDE$y,
+      maxEval = maxEval,
+      pdim = pdim,
+      evalPoints = evalPoints,
+      takeLog = takeLog
+    )
+    return(list(kdes = kdes, resampler = NULL))
+  }
 
   # remove any zero and negative density estimates
   newY <- radKDE$y
@@ -330,8 +342,11 @@ radialKDE <- function(radii, evalPoints, pdim, returnFun = FALSE) {
   resampler <- approxfun(x = radKDE$x, y = densR, rule = 1:2, method = "linear")
   kdes <- resampler(evalPoints)
   kdes <- pmax(kdes, min(densR))
-  if (!returnFun) {
-    resampler <- NULL
+  if (takeLog) {
+    kdes <- log(kdes)
+  }
+  if (is.matrix(evalPoints)) {
+    dim(kdes) <- dim(evalPoints)
   }
 
   # return(list(kdes=resampler(evalPoints),resampler=resampler))
@@ -579,10 +594,14 @@ kamila <- function(
     # Deprecated option
     returnResampler <- FALSE
 
+    if (hasCon) {
+      conVarMat <- as.matrix(conVar)
+    }
+
     if (hasCat) {
-      numLev <- sapply(catFactor, function(xx) length(levels(xx)))
+      numLev <- as.integer(sapply(catFactor, function(xx) length(levels(xx))))
       catFactorNumeric <- matrix(
-        sapply(catFactor, as.numeric, simplify = TRUE),
+        as.integer(sapply(catFactor, as.integer, simplify = TRUE)),
         nrow = numObs,
         ncol = numCatVar
       )
@@ -593,10 +612,13 @@ kamila <- function(
     catLogLikVect <- rep(NaN, numInit)
     winDistVect <- rep(NaN, numInit)
     if (hasCon) {
-      totalDist <- sum(dptmCpp(
-        pts = conVar,
-        myMeans = matrix(colMeans(conVar), nrow = 1),
-        wgts = conWeights
+      totalDist <- sum(dptm(
+        pts = conVarMat,
+        myMeans = matrix(colMeans(conVarMat), nrow = 1),
+        wgts = conWeights,
+        ppDim = numConVar,
+        kkMean = 1,
+        nn = numObs
       ))
     } else {
       totalDist <- NaN
@@ -642,31 +664,31 @@ kamila <- function(
         numIter <- numIter + 1
 
         if (hasCon) {
-          dist_i <- dptmCpp(pts = conVar, myMeans = means_i, wgts = conWeights)
+          dist_i <- dptm(
+            pts = conVarMat,
+            myMeans = means_i,
+            wgts = conWeights,
+            ppDim = numConVar,
+            kkMean = numClust,
+            nn = numObs
+          )
           minDist_i <- rowMin(dist_i)
 
-          logDistRadDens_vec <- log(
-            radialKDE(
-              radii = minDist_i,
-              evalPoints = c(dist_i),
-              pdim = numConVar,
-              returnFun = returnResampler
-            )$kdes
-          )
-          logDistRadDens_i <- matrix(
-            logDistRadDens_vec,
-            nrow = numObs,
-            ncol = numClust
-          )
+          logDistRadDens_i <- radialKDE(
+            radii = minDist_i,
+            evalPoints = dist_i,
+            pdim = numConVar,
+            returnFun = returnResampler,
+            takeLog = TRUE
+          )$kdes
         }
 
         if (hasCat) {
-          individualLogProbs <- getIndividualLogProbs(
+          catLogLiks <- calcCatLogLiks(
             catFactorNum = catFactorNumeric,
             catWeights = catWeights,
             logProbsCond_i = logProbsCond_i
           )
-          catLogLiks <- Reduce(f = "+", x = individualLogProbs)
         }
 
         if (hasCon && hasCat) {
@@ -679,27 +701,32 @@ kamila <- function(
 
         # partition data into clusters
         membOld <- membNew
-        membNew <- rowMaxInds(allLogLiks)
+        membNew <- as.integer(rowMaxInds(allLogLiks))
 
         # calculate new means / probabilities
         if (hasCon) {
           means_i <- aggregateMeans(
-            conVar = as.matrix(conVar),
+            conVar = conVarMat,
             membNew = membNew,
             kk = numClust
           )
         }
 
         if (hasCat) {
-          jointProbsList <- jointTabSmoothedList(catFactorNumeric, membNew, numLev, catBw, kk = numClust)
-          logProbsCond_i <- lapply(jointProbsList, FUN = function(xx) log(xx / rowSums(xx)))
+          logProbsCond_i <- updateLogProbs(
+            catFactorNum = catFactorNumeric,
+            membNew = membNew,
+            numLev = numLev,
+            catBw = catBw,
+            kk = numClust
+          )
         }
 
         if (verbose) {
           membLongList[[init]][[numIter]] <- membOld
         }
 
-        if (length(unique(membNew)) < numClust) {
+        if (any(tabulate(membNew, numClust) == 0L)) {
           degenerateSoln <- TRUE
           break
         }
@@ -717,7 +744,7 @@ kamila <- function(
       # other useful internal measures of cluster quality
       if (hasCat) catLogLikVect[init] <- sum(rowMax(catLogLiks))
       if (hasCon) {
-        winDistVect[init] <- sum(dist_i[cbind(1:numObs, membNew)])
+        winDistVect[init] <- sum(dist_i[1:numObs + (membNew - 1L) * numObs])
         winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
         if (winToBetRat < 0) winToBetRat <- 100
       }
@@ -1160,36 +1187,48 @@ classifyKamila <- function(obj, newData) {
   }
 
   if (hasCon) {
-    distances <- with(obj, dptmCpp(
-      pts = input$conVar,
-      myMeans = finalCenters,
-      wgts = input$conWeights
-    ))
-    minDistances <- apply(distances, 1, min)
-
-    newDistances <- with(obj, dptmCpp(
-      pts = newCon,
-      myMeans = finalCenters,
-      wgts = input$conWeights
-    ))
-
-    logRadDens <- matrix(
-      log(radialKDE(radii = minDistances, evalPoints = c(newDistances), pdim = ncol(newCon))$kdes),
-      nrow = nrow(newCon),
-      ncol = nrow(obj$finalCenters)
+    conVarMat <- as.matrix(obj$input$conVar)
+    distances <- dptm(
+      pts = conVarMat,
+      myMeans = obj$finalCenters,
+      wgts = obj$input$conWeights,
+      ppDim = ncol(conVarMat),
+      kkMean = nrow(obj$finalCenters),
+      nn = nrow(conVarMat)
     )
+    minDistances <- rowMin(distances)
+
+    newConMat <- as.matrix(newCon)
+    newDistances <- dptm(
+      pts = newConMat,
+      myMeans = obj$finalCenters,
+      wgts = obj$input$conWeights,
+      ppDim = ncol(newConMat),
+      kkMean = nrow(obj$finalCenters),
+      nn = nrow(newConMat)
+    )
+
+    logRadDens <- radialKDE(
+      radii = minDistances,
+      evalPoints = newDistances,
+      pdim = ncol(newConMat),
+      takeLog = TRUE
+    )$kdes
   }
 
   if (hasCat) {
+    numCatVar <- ncol(newCatFactor)
     logClustProbs <- lapply(obj$finalProbs, log)
-    logCatKProbs <- with(obj, lapply(
-      X = seq_len(ncol(newCatFactor)),
-      FUN = function(ind) {
-        input$catWeights[ind] * t(logClustProbs[[ind]][, as.numeric(newCatFactor[, ind]), drop = FALSE])
-      }
-    ))
-
-    catLogLiks <- Reduce(f = "+", x = logCatKProbs)
+    newCatFactorNum <- matrix(
+      as.integer(unlist(lapply(newCatFactor, as.integer), use.names = FALSE)),
+      nrow = nrow(newCatFactor),
+      ncol = numCatVar
+    )
+    catLogLiks <- calcCatLogLiks(
+      catFactorNum = newCatFactorNum,
+      catWeights = obj$input$catWeights,
+      logProbsCond_i = logClustProbs
+    )
   }
 
   if (hasCon && hasCat) {
@@ -1200,7 +1239,7 @@ classifyKamila <- function(obj, newData) {
     combinedLogLik <- catLogLiks
   }
 
-  membership <- as.numeric(apply(combinedLogLik, 1, which.max))
+  membership <- as.numeric(rowMaxInds(combinedLogLik))
 
   return(membership)
 }

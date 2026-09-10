@@ -379,3 +379,84 @@ test_that("KAMILA works natively with categorical-only data", {
   expect_equal(bic_cat$nConParm, 0)
   expect_true(bic_cat$nCatParm > 0)
 })
+
+test_that("radialKDE legacy returnFun option and zero categorical bandwidth", {
+  # 1. radialKDE returnFun = TRUE legacy code path with both zero tails and high density
+  res_rkde <- suppressWarnings(kamila:::radialKDE(
+    radii = c(0.01, 0.011, 0.012, 0.013, 0.014),
+    evalPoints = c(0.001, 0.01, 50.0),
+    pdim = 2,
+    returnFun = TRUE
+  ))
+  expect_true(is.list(res_rkde))
+  expect_true(is.function(res_rkde$resampler))
+  expect_equal(length(res_rkde$kdes), 3)
+  expect_true(all(res_rkde$kdes > 0))
+  eval_sampled <- res_rkde$resampler(c(0.01, 0.02))
+  expect_equal(length(eval_sampled), 2)
+
+  # 2. radialKDE returnFun = TRUE with takeLog = TRUE and matrix evalPoints
+  res_rkde_mat <- kamila:::radialKDE(
+    radii = c(0.01, 0.02, 0.03, 0.04, 0.05),
+    evalPoints = matrix(c(0.01, 0.02, 0.03, 0.04), nrow = 2, ncol = 2),
+    pdim = 2,
+    returnFun = TRUE,
+    takeLog = TRUE
+  )
+  expect_true(is.matrix(res_rkde_mat$kdes))
+  expect_equal(dim(res_rkde_mat$kdes), c(2, 2))
+  expect_true(all(is.finite(res_rkde_mat$kdes)))
+
+  # 3. kamila with catBw = 0
+  set.seed(42)
+  dat <- genMixedData(
+    sampSize = 40,
+    nConVar = 2,
+    nCatVar = 2,
+    nCatLevels = 4,
+    nConWithErr = 1,
+    nCatWithErr = 1,
+    popProportions = c(0.5, 0.5),
+    conErrLev = 0.2,
+    catErrLev = 0.2
+  )
+  conDf <- data.frame(scale(dat$conVars))
+  catDf <- data.frame(lapply(data.frame(dat$catVars), factor))
+
+  res_zero_bw <- kamila(
+    conVar = conDf,
+    catFactor = catDf,
+    numClust = 2,
+    numInit = 2,
+    maxIter = 10,
+    catBw = 0
+  )
+  expect_true(all(res_zero_bw$finalMemb %in% 1:2))
+  expect_equal(length(res_zero_bw$finalMemb), 40)
+
+  # 4. Direct C++ routines with catBw = 0 and K >= 5
+  catNum <- matrix(as.integer(sample(1:3, 40 * 2, replace = TRUE)), nrow = 40, ncol = 2)
+  memb <- as.integer(sample(1:2, 40, replace = TRUE))
+  numLev <- c(3L, 3L)
+
+  tabs_zero <- kamila:::jointTabSmoothedList(catNum, memb, numLev, catBw = 0, kk = 2)
+  expect_equal(length(tabs_zero), 2)
+  expect_true(is.matrix(tabs_zero[[1]]))
+  expect_equal(dim(tabs_zero[[1]]), c(2, 3))
+
+  lps_zero <- kamila:::updateLogProbs(catNum, memb, numLev, catBw = 0, kk = 2)
+  expect_equal(length(lps_zero), 2)
+  expect_true(is.matrix(lps_zero[[1]]))
+  expect_equal(dim(lps_zero[[1]]), c(2, 3))
+
+  # 5. calcCatLogLiks with K = 5 (exercising general loop)
+  catNumSmall <- matrix(as.integer(c(1, 2, 1, 2, 1, 2)), nrow = 3, ncol = 2)
+  catWgts <- c(1, 1)
+  lp5 <- list(
+    matrix(log(rep(0.5, 10)), nrow = 5, ncol = 2),
+    matrix(log(rep(0.5, 10)), nrow = 5, ncol = 2)
+  )
+  catLiks5 <- kamila:::calcCatLogLiks(catNumSmall, catWgts, lp5)
+  expect_equal(dim(catLiks5), c(3, 5))
+  expect_true(all(is.finite(catLiks5)))
+})
