@@ -18,8 +18,22 @@ if (exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1") {
 has_pkg <- function(pkg) requireNamespace(pkg, quietly = TRUE)
 
 # ------------------------------------------------------------------------------
-# Helpers: Safe Scaling & Evaluation Metrics
+# Helpers: Safe Scaling, Metric Evaluation & Input Validation
 # ------------------------------------------------------------------------------
+get_valid_val <- function(val, default_val, min_val = NULL) {
+  if (is.null(val) || length(val) == 0 || is.na(val[1])) {
+    return(default_val)
+  }
+  num_val <- suppressWarnings(as.numeric(val[1]))
+  if (is.na(num_val)) {
+    return(default_val)
+  }
+  if (!is.null(min_val) && num_val < min_val) {
+    return(default_val)
+  }
+  if (is.integer(default_val)) as.integer(num_val) else num_val
+}
+
 safe_scale <- function(m) {
   m_mat <- as.matrix(m)
   sds <- apply(m_mat, 2, sd, na.rm = TRUE)
@@ -99,7 +113,13 @@ calc_misclass_error <- function(true_labels, pred_labels) {
 # ------------------------------------------------------------------------------
 generate_synthetic_mixed_data <- function(n = 1000, p_con = 10, p_cat = 10, k = 4,
                                           separation = 2.0, num_levels = 10, seed = NULL) {
-  if (!is.null(seed)) set.seed(seed)
+  n <- get_valid_val(n, 1000L, min_val = 10)
+  p_con <- get_valid_val(p_con, 10L, min_val = 1)
+  p_cat <- get_valid_val(p_cat, 10L, min_val = 1)
+  k <- get_valid_val(k, 4L, min_val = 2)
+  separation <- get_valid_val(separation, 2.0, min_val = 0.1)
+  num_levels <- get_valid_val(num_levels, 10L, min_val = 2)
+  if (!is.null(seed) && length(seed) > 0 && !is.na(seed[1])) set.seed(as.integer(seed[1]))
 
   props <- rep(1 / k, k)
   cluster_assign <- sample(seq_len(k), size = n, replace = TRUE, prob = props)
@@ -163,6 +183,8 @@ run_single_fixed_k <- function(m, dat, k) {
   m_info <- method_meta[[m]]
   m_name <- m_info$name
   m_pkg <- m_info$pkg
+
+  k <- get_valid_val(k, 4L, min_val = 2)
 
   if (!has_pkg(m_pkg)) {
     return(data.frame(
@@ -265,6 +287,7 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
 
   if (!has_pkg(m_pkg)) return(NULL)
 
+  true_k <- get_valid_val(true_k, 4L, min_val = 2)
   k_max_search <- min(10, max(5, true_k + 2))
   k_range <- 2:k_max_search
 
@@ -802,8 +825,8 @@ server <- function(input, output, session) {
   selection_wall_time <- reactiveVal(NULL)
 
   get_or_create_cluster <- function(n_workers) {
-    cl <- session_cluster()
-    cur_size <- current_cluster_size()
+    cl <- isolate(session_cluster())
+    cur_size <- isolate(current_cluster_size())
     if (!is.null(cl) && cur_size == n_workers) {
       return(cl)
     }
@@ -832,7 +855,7 @@ server <- function(input, output, session) {
   }
 
   session$onSessionEnded(function() {
-    cl <- session_cluster()
+    cl <- isolate(session_cluster())
     if (!is.null(cl)) {
       try(parallel::stopCluster(cl), silent = TRUE)
     }
@@ -859,15 +882,22 @@ server <- function(input, output, session) {
     input$btn_run_fixed
     input$btn_run_select
     isolate({
-      n_calc <- if (!is.null(input$log_n)) as.integer(round(10^input$log_n)) else 1000L
+      n_calc <- as.integer(round(10^get_valid_val(input$log_n, 3.0, min_val = 3.0)))
+      p_con_val <- get_valid_val(input$p_con, 10L, min_val = 1)
+      p_cat_val <- get_valid_val(input$p_cat, 10L, min_val = 1)
+      k_val <- get_valid_val(input$k_clusters, 4L, min_val = 2)
+      sep_val <- get_valid_val(input$separation, 2.0, min_val = 0.1)
+      levels_val <- get_valid_val(input$num_levels, 10L, min_val = 2)
+      seed_val <- get_valid_val(input$rand_seed, 42L, min_val = 1)
+
       generate_synthetic_mixed_data(
         n = n_calc,
-        p_con = input$p_con,
-        p_cat = input$p_cat,
-        k = input$k_clusters,
-        separation = input$separation,
-        num_levels = input$num_levels,
-        seed = input$rand_seed
+        p_con = p_con_val,
+        p_cat = p_cat_val,
+        k = k_val,
+        separation = sep_val,
+        num_levels = levels_val,
+        seed = seed_val
       )
     })
   })
@@ -877,10 +907,14 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------------
   benchmark_results <- eventReactive(list(input$btn_run_fixed, input$rand_seed), {
     dat <- sim_data()
-    selected_methods <- input$methods
-    k <- isolate(input$k_clusters)
+    selected_methods <- if (!is.null(input$methods) && length(input$methods) > 0) {
+      input$methods
+    } else {
+      names(method_meta)
+    }
+    k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
     use_par <- isTRUE(input$use_parallel)
-    n_cores <- if (!is.null(input$num_cores)) as.integer(input$num_cores) else 1
+    n_cores <- get_valid_val(input$num_cores, 1L, min_val = 1)
 
     valid_methods <- intersect(names(method_meta), selected_methods)
     if (length(valid_methods) == 0) {
@@ -935,10 +969,14 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------------
   selection_results <- eventReactive(input$btn_run_select, {
     dat <- sim_data()
-    selected_methods <- input$methods
-    true_k <- isolate(input$k_clusters)
+    selected_methods <- if (!is.null(input$methods) && length(input$methods) > 0) {
+      input$methods
+    } else {
+      names(method_meta)
+    }
+    true_k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
     use_par <- isTRUE(input$use_parallel)
-    n_cores <- if (!is.null(input$num_cores)) as.integer(input$num_cores) else 1
+    n_cores <- get_valid_val(input$num_cores, 1L, min_val = 1)
 
     valid_methods <- intersect(names(method_meta), selected_methods)
     if (length(valid_methods) == 0) {
@@ -999,8 +1037,12 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------------
   cluster_assignments <- reactive({
     dat <- sim_data()
-    k <- isolate(input$k_clusters)
-    selected_methods <- input$methods
+    k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
+    selected_methods <- if (!is.null(input$methods) && length(input$methods) > 0) {
+      input$methods
+    } else {
+      names(method_meta)
+    }
     membs <- list(true = dat$trueID)
 
     # KAMILA
@@ -1222,6 +1264,8 @@ server <- function(input, output, session) {
     valid_res <- res[!is.na(res$Predicted_K) & res$Method %in% active_methods, , drop = FALSE]
     if (nrow(valid_res) == 0) return(NULL)
 
+    k_true <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
+
     par(mar = c(10.5, 4.5, 3, 1))
     barplot(
       valid_res$Predicted_K,
@@ -1233,8 +1277,8 @@ server <- function(input, output, session) {
       las = 2,
       cex.names = 0.85
     )
-    abline(h = isolate(input$k_clusters), col = "red", lty = 2, lwd = 2)
-    legend("topright", legend = paste("True K =", isolate(input$k_clusters)), col = "red", lty = 2, lwd = 2)
+    abline(h = k_true, col = "red", lty = 2, lwd = 2)
+    legend("topright", legend = paste("True K =", k_true), col = "red", lty = 2, lwd = 2)
   })
 
   # ----------------------------------------------------------------------------
@@ -1243,7 +1287,7 @@ server <- function(input, output, session) {
   output$lda_cluster_plot <- renderPlot({
     dat <- sim_data()
     all_membs <- cluster_assignments()
-    k_true <- isolate(input$k_clusters)
+    k_true <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
     n_total <- nrow(dat$fullData)
 
     # Subsample 1,000 points (common across all panels and views)
