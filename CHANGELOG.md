@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.3] - 2026-09-07
 
 ### Added
+- **In-Progress Run Cancellation & Inline Progress Indicators**: Built non-dismissible, integrated Bootstrap 5 progress bars directly into the dashboard next to benchmark action controls and added a prominent "Stop Run" cancellation capability with instant reactive halting and partial result retention (`inst/shiny/horserace/app.R`).
 - **Standardized Multi-Start Benchmark Runs**: Standardized all compared clustering methods in the interactive Shiny benchmark dashboard (`inst/shiny/horserace/app.R`) to use 5 random initialization starts (`numInit = 5`, `nstart = 5`, `nrep = 5`, `nbKeep = 5`) for fair computational and performance comparisons.
 - **Fast C++ Prediction Strength**: Re-implemented prediction strength evaluation in C++ (`calcPsCpp` via Rcpp) with $O(N + K^2)$ algorithmic complexity, replacing previous $O(N^2)$ pairwise operations (#12, #42).
 - **Parallel Prediction Strength**: Added multi-core parallel processing support for prediction strength cross-validation runs using `numCores` parameter in `kamila()` (#46).

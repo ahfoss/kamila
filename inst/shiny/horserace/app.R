@@ -634,12 +634,8 @@ ui <- fluidPage(
             class = "alert alert-info",
             "Evaluate ARI (Adjusted Rand Index), misclassification error, and runtime for a fixed number of clusters."
           ),
-          actionButton(
-            "btn_run_fixed",
-            "Run Fixed-K Benchmark",
-            class = "btn-primary btn-md",
-            style = "margin-top: 4px; margin-bottom: 16px; font-weight: 600;"
-          ),
+          uiOutput("fixed_action_ui"),
+          uiOutput("fixed_progress_ui"),
           tags$h4("Performance Summary", style = "font-weight: 600; margin-top: 10px;"),
           uiOutput("fixed_timing_summary"),
           tableOutput("benchmark_table"),
@@ -672,12 +668,8 @@ ui <- fluidPage(
             tags$strong("Model Selection: "),
             "Simulates unknown cluster count over candidate K in [2, 10]. Shows predicted cluster count and criterion."
           ),
-          actionButton(
-            "btn_run_select",
-            "Run Cluster Selection (K in 2:10)",
-            class = "btn-primary btn-md",
-            style = "margin-top: 4px; margin-bottom: 16px; font-weight: 600;"
-          ),
+          uiOutput("selection_action_ui"),
+          uiOutput("selection_progress_ui"),
           tags$h4("Cluster Selection Results", style = "font-weight: 600; margin-top: 10px;"),
           uiOutput("selection_timing_summary"),
           tableOutput("selection_table"),
@@ -816,9 +808,25 @@ server <- function(input, output, session) {
   })
 
   # ----------------------------------------------------------------------------
-  # Fixed-K Benchmark
+  # Fixed-K Benchmark State Machine & Progress
   # ----------------------------------------------------------------------------
-  benchmark_results <- eventReactive(list(input$btn_run_fixed, input$rand_seed), {
+  fixed_state <- reactiveValues(
+    status = "idle",
+    cur_idx = 0L,
+    total_steps = 0L,
+    methods = character(0),
+    results = list(),
+    start_time = NULL,
+    wall_ms = 0,
+    step_desc = "",
+    stop_requested = FALSE,
+    dat = NULL,
+    k = 4L
+  )
+
+  observeEvent(list(input$btn_run_fixed, input$rand_seed), {
+    if (identical(fixed_state$status, "running")) return()
+
     dat <- sim_data()
     selected_methods <- if (!is.null(input$methods) && length(input$methods) > 0) {
       input$methods
@@ -826,41 +834,196 @@ server <- function(input, output, session) {
       names(method_meta)
     }
     k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
-
     valid_methods <- intersect(names(method_meta), selected_methods)
+
     if (length(valid_methods) == 0) {
-      return(data.frame(Message = "No techniques selected"))
+      fixed_state$status <- "idle"
+      fixed_state$results <- list(data.frame(Message = "No techniques selected"))
+      return()
     }
 
-    results_list <- withProgress(
-      message = "Running Fixed-K Benchmark...",
-      detail = "Initializing benchmark...",
-      value = 0.05,
-      {
-        progress_cb <- function(cur_idx, total_count, item_desc) {
-          incProgress(
-            amount = 0.9 / total_count,
-            detail = sprintf("[%d/%d] %s", cur_idx, total_count, item_desc)
-          )
-        }
-        run_benchmark_jobs(
-          method_keys = valid_methods,
-          runner_fn = run_single_fixed_k,
-          progress_fn = progress_cb,
-          dat = dat,
-          k = k
-        )
-      }
+    fixed_state$dat <- dat
+    fixed_state$k <- k
+    fixed_state$methods <- valid_methods
+    fixed_state$total_steps <- length(valid_methods)
+    fixed_state$cur_idx <- 1L
+    fixed_state$results <- list()
+    fixed_state$stop_requested <- FALSE
+    fixed_state$start_time <- proc.time()
+    fixed_state$wall_ms <- 0
+    m_first <- valid_methods[1]
+    fixed_state$step_desc <- sprintf(
+      "Evaluating %s (%s)...", method_meta[[m_first]]$name, method_meta[[m_first]]$pkg
     )
-
-    fixed_wall_time(attr(results_list, "wall_clock_ms"))
-    do.call(rbind, results_list)
+    fixed_state$status <- "running"
   }, ignoreNULL = FALSE)
 
+  observeEvent(input$btn_stop_fixed, {
+    if (identical(fixed_state$status, "running")) {
+      fixed_state$stop_requested <- TRUE
+      fixed_state$status <- "cancelled"
+      t_elapsed <- (proc.time() - fixed_state$start_time)[["elapsed"]] * 1000
+      fixed_state$wall_ms <- t_elapsed
+      fixed_wall_time(t_elapsed)
+      fixed_state$step_desc <- sprintf("Stopped by user after %d method(s)", length(fixed_state$results))
+    }
+  })
+
+  observe({
+    if (!identical(fixed_state$status, "running")) return()
+
+    if (isTRUE(fixed_state$stop_requested)) {
+      fixed_state$status <- "cancelled"
+      t_elapsed <- (proc.time() - fixed_state$start_time)[["elapsed"]] * 1000
+      fixed_state$wall_ms <- t_elapsed
+      fixed_wall_time(t_elapsed)
+      fixed_state$step_desc <- sprintf("Stopped by user after %d method(s)", length(fixed_state$results))
+      return()
+    }
+
+    cur_i <- fixed_state$cur_idx
+    if (cur_i > fixed_state$total_steps) {
+      t_elapsed <- (proc.time() - fixed_state$start_time)[["elapsed"]] * 1000
+      fixed_state$wall_ms <- t_elapsed
+      fixed_wall_time(t_elapsed)
+      fixed_state$status <- "complete"
+      fixed_state$step_desc <- "Completed"
+      return()
+    }
+
+    m <- fixed_state$methods[cur_i]
+    m_info <- method_meta[[m]]
+    fixed_state$step_desc <- sprintf(
+      "[%d/%d] Running %s (%s)...",
+      cur_i, fixed_state$total_steps, m_info$name, m_info$pkg
+    )
+
+    res_i <- run_single_fixed_k(m, dat = fixed_state$dat, k = fixed_state$k)
+    fixed_state$results[[length(fixed_state$results) + 1]] <- res_i
+
+    if (cur_i >= fixed_state$total_steps) {
+      t_elapsed <- (proc.time() - fixed_state$start_time)[["elapsed"]] * 1000
+      fixed_state$wall_ms <- t_elapsed
+      fixed_wall_time(t_elapsed)
+      fixed_state$status <- "complete"
+      fixed_state$step_desc <- "Completed"
+    } else {
+      fixed_state$cur_idx <- cur_i + 1L
+      shiny::invalidateLater(10, session)
+    }
+  })
+
+  output$fixed_action_ui <- renderUI({
+    is_running <- identical(fixed_state$status, "running")
+    if (is_running) {
+      tags$div(
+        style = "display: flex; align-items: center; gap: 10px; margin-top: 4px; margin-bottom: 8px;",
+        actionButton(
+          "btn_run_fixed_disabled",
+          "Running Fixed-K Benchmark...",
+          class = "btn-secondary btn-md disabled",
+          disabled = "disabled",
+          style = "font-weight: 600;"
+        ),
+        actionButton(
+          "btn_stop_fixed",
+          "Stop Run",
+          class = "btn-danger btn-md",
+          style = "font-weight: 600;"
+        )
+      )
+    } else {
+      tags$div(
+        style = "display: flex; align-items: center; gap: 10px; margin-top: 4px; margin-bottom: 8px;",
+        actionButton(
+          "btn_run_fixed",
+          "Run Fixed-K Benchmark",
+          class = "btn-primary btn-md",
+          style = "font-weight: 600;"
+        )
+      )
+    }
+  })
+
+  output$fixed_progress_ui <- renderUI({
+    status <- fixed_state$status
+    if (identical(status, "running")) {
+      total <- max(1L, fixed_state$total_steps)
+      completed_count <- max(0L, fixed_state$cur_idx - 1L)
+      pct <- round(completed_count / total * 100)
+      pct_display <- max(8L, pct)
+      tags$div(
+        style = "margin-top: 6px; margin-bottom: 14px;",
+        tags$div(
+          class = "progress",
+          style = "height: 24px; border-radius: 6px; background-color: #e9ecef;",
+          tags$div(
+            class = "progress-bar progress-bar-striped progress-bar-animated bg-primary",
+            role = "progressbar",
+            style = sprintf("width: %d%%; font-weight: 600; font-size: 0.85rem; line-height: 24px;", pct_display),
+            sprintf("%d%%", pct)
+          )
+        ),
+        tags$div(
+          style = "margin-top: 4px; font-size: 0.86rem; color: #495057; display: flex; justify-content: space-between;",
+          tags$span(tags$strong("Current Task: "), fixed_state$step_desc),
+          tags$span(sprintf("Step %d of %d", min(fixed_state$cur_idx, total), total))
+        )
+      )
+    } else if (identical(status, "cancelled")) {
+      tags$div(
+        class = "alert alert-warning",
+        style = "padding: 8px 12px; margin-top: 6px; margin-bottom: 14px; font-size: 0.88rem;",
+        tags$strong("Run Stopped: "),
+        sprintf(
+          "Benchmark was stopped by user. Displaying %d completed result(s) below.",
+          length(fixed_state$results)
+        )
+      )
+    } else if (identical(status, "complete")) {
+      tags$div(
+        class = "alert alert-success",
+        style = "padding: 8px 12px; margin-top: 6px; margin-bottom: 14px; font-size: 0.88rem;",
+        tags$strong("Benchmark Complete: "),
+        sprintf("All %d techniques evaluated in %.1f ms.", fixed_state$total_steps, fixed_state$wall_ms)
+      )
+    } else {
+      NULL
+    }
+  })
+
+  benchmark_results <- reactive({
+    if (length(fixed_state$results) == 0) {
+      if (identical(fixed_state$status, "running")) {
+        return(data.frame(Message = "Benchmark in progress..."))
+      }
+      return(NULL)
+    }
+    valid_rows <- fixed_state$results[!sapply(fixed_state$results, is.null)]
+    if (length(valid_rows) == 0) return(NULL)
+    do.call(rbind, valid_rows)
+  })
+
   # ----------------------------------------------------------------------------
-  # Cluster Selection Benchmark (K in 2:10)
+  # Cluster Selection Benchmark (K in 2:10) State Machine & Progress
   # ----------------------------------------------------------------------------
-  selection_results <- eventReactive(input$btn_run_select, {
+  selection_state <- reactiveValues(
+    status = "idle",
+    cur_idx = 0L,
+    total_steps = 0L,
+    methods = character(0),
+    results = list(),
+    start_time = NULL,
+    wall_ms = 0,
+    step_desc = "",
+    stop_requested = FALSE,
+    dat = NULL,
+    true_k = 4L
+  )
+
+  observeEvent(input$btn_run_select, {
+    if (identical(selection_state$status, "running")) return()
+
     dat <- sim_data()
     selected_methods <- if (!is.null(input$methods) && length(input$methods) > 0) {
       input$methods
@@ -868,38 +1031,179 @@ server <- function(input, output, session) {
       names(method_meta)
     }
     true_k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
-
     valid_methods <- intersect(names(method_meta), selected_methods)
+
     if (length(valid_methods) == 0) {
-      return(data.frame(Message = "No techniques selected"))
+      selection_state$status <- "idle"
+      selection_state$results <- list(data.frame(Message = "No techniques selected"))
+      return()
     }
 
-    results_list <- withProgress(
-      message = "Running Cluster Selection (K in 2:10)...",
-      detail = "Evaluating candidate cluster counts...",
-      value = 0.05,
-      {
-        progress_cb <- function(cur_idx, total_count, item_desc) {
-          incProgress(
-            amount = 0.9 / total_count,
-            detail = sprintf("[%d/%d] %s", cur_idx, total_count, item_desc)
-          )
-        }
-        run_benchmark_jobs(
-          method_keys = valid_methods,
-          runner_fn = run_single_selection,
-          progress_fn = progress_cb,
-          dat = dat,
-          true_k = true_k
-        )
-      }
+    selection_state$dat <- dat
+    selection_state$true_k <- true_k
+    selection_state$methods <- valid_methods
+    selection_state$total_steps <- length(valid_methods)
+    selection_state$cur_idx <- 1L
+    selection_state$results <- list()
+    selection_state$stop_requested <- FALSE
+    selection_state$start_time <- proc.time()
+    selection_state$wall_ms <- 0
+    m_first <- valid_methods[1]
+    selection_state$step_desc <- sprintf(
+      "Evaluating %s (%s)...", method_meta[[m_first]]$name, method_meta[[m_first]]$pkg
+    )
+    selection_state$status <- "running"
+  })
+
+  observeEvent(input$btn_stop_select, {
+    if (identical(selection_state$status, "running")) {
+      selection_state$stop_requested <- TRUE
+      selection_state$status <- "cancelled"
+      t_elapsed <- (proc.time() - selection_state$start_time)[["elapsed"]] * 1000
+      selection_state$wall_ms <- t_elapsed
+      selection_wall_time(t_elapsed)
+      selection_state$step_desc <- sprintf(
+        "Stopped by user after %d method(s)", length(selection_state$results)
+      )
+    }
+  })
+
+  observe({
+    if (!identical(selection_state$status, "running")) return()
+
+    if (isTRUE(selection_state$stop_requested)) {
+      selection_state$status <- "cancelled"
+      t_elapsed <- (proc.time() - selection_state$start_time)[["elapsed"]] * 1000
+      selection_state$wall_ms <- t_elapsed
+      selection_wall_time(t_elapsed)
+      selection_state$step_desc <- sprintf(
+        "Stopped by user after %d method(s)", length(selection_state$results)
+      )
+      return()
+    }
+
+    cur_i <- selection_state$cur_idx
+    if (cur_i > selection_state$total_steps) {
+      t_elapsed <- (proc.time() - selection_state$start_time)[["elapsed"]] * 1000
+      selection_state$wall_ms <- t_elapsed
+      selection_wall_time(t_elapsed)
+      selection_state$status <- "complete"
+      selection_state$step_desc <- "Completed"
+      return()
+    }
+
+    m <- selection_state$methods[cur_i]
+    m_info <- method_meta[[m]]
+    selection_state$step_desc <- sprintf(
+      "[%d/%d] Running %s (%s)...",
+      cur_i, selection_state$total_steps, m_info$name, m_info$pkg
     )
 
-    selection_wall_time(attr(results_list, "wall_clock_ms"))
-    valid_rows <- results_list[!sapply(results_list, is.null)]
-    if (length(valid_rows) == 0) {
-      return(data.frame(Message = "No selection results returned"))
+    res_i <- run_single_selection(m, dat = selection_state$dat, true_k = selection_state$true_k)
+    if (!is.null(res_i)) {
+      selection_state$results[[length(selection_state$results) + 1]] <- res_i
     }
+
+    if (cur_i >= selection_state$total_steps) {
+      t_elapsed <- (proc.time() - selection_state$start_time)[["elapsed"]] * 1000
+      selection_state$wall_ms <- t_elapsed
+      selection_wall_time(t_elapsed)
+      selection_state$status <- "complete"
+      selection_state$step_desc <- "Completed"
+    } else {
+      selection_state$cur_idx <- cur_i + 1L
+      shiny::invalidateLater(10, session)
+    }
+  })
+
+  output$selection_action_ui <- renderUI({
+    is_running <- identical(selection_state$status, "running")
+    if (is_running) {
+      tags$div(
+        style = "display: flex; align-items: center; gap: 10px; margin-top: 4px; margin-bottom: 8px;",
+        actionButton(
+          "btn_run_select_disabled",
+          "Running Cluster Selection...",
+          class = "btn-secondary btn-md disabled",
+          disabled = "disabled",
+          style = "font-weight: 600;"
+        ),
+        actionButton(
+          "btn_stop_select",
+          "Stop Run",
+          class = "btn-danger btn-md",
+          style = "font-weight: 600;"
+        )
+      )
+    } else {
+      tags$div(
+        style = "display: flex; align-items: center; gap: 10px; margin-top: 4px; margin-bottom: 8px;",
+        actionButton(
+          "btn_run_select",
+          "Run Cluster Selection (K in 2:10)",
+          class = "btn-primary btn-md",
+          style = "font-weight: 600;"
+        )
+      )
+    }
+  })
+
+  output$selection_progress_ui <- renderUI({
+    status <- selection_state$status
+    if (identical(status, "running")) {
+      total <- max(1L, selection_state$total_steps)
+      completed_count <- max(0L, selection_state$cur_idx - 1L)
+      pct <- round(completed_count / total * 100)
+      pct_display <- max(8L, pct)
+      tags$div(
+        style = "margin-top: 6px; margin-bottom: 14px;",
+        tags$div(
+          class = "progress",
+          style = "height: 24px; border-radius: 6px; background-color: #e9ecef;",
+          tags$div(
+            class = "progress-bar progress-bar-striped progress-bar-animated bg-success",
+            role = "progressbar",
+            style = sprintf("width: %d%%; font-weight: 600; font-size: 0.85rem; line-height: 24px;", pct_display),
+            sprintf("%d%%", pct)
+          )
+        ),
+        tags$div(
+          style = "margin-top: 4px; font-size: 0.86rem; color: #495057; display: flex; justify-content: space-between;",
+          tags$span(tags$strong("Current Task: "), selection_state$step_desc),
+          tags$span(sprintf("Step %d of %d", min(selection_state$cur_idx, total), total))
+        )
+      )
+    } else if (identical(status, "cancelled")) {
+      tags$div(
+        class = "alert alert-warning",
+        style = "padding: 8px 12px; margin-top: 6px; margin-bottom: 14px; font-size: 0.88rem;",
+        tags$strong("Run Stopped: "),
+        sprintf(
+          "Model selection was stopped by user. Displaying %d completed result(s) below.",
+          length(selection_state$results)
+        )
+      )
+    } else if (identical(status, "complete")) {
+      tags$div(
+        class = "alert alert-success",
+        style = "padding: 8px 12px; margin-top: 6px; margin-bottom: 14px; font-size: 0.88rem;",
+        tags$strong("Model Selection Complete: "),
+        sprintf("All %d techniques evaluated in %.1f ms.", selection_state$total_steps, selection_state$wall_ms)
+      )
+    } else {
+      NULL
+    }
+  })
+
+  selection_results <- reactive({
+    if (length(selection_state$results) == 0) {
+      if (identical(selection_state$status, "running")) {
+        return(data.frame(Message = "Model selection in progress..."))
+      }
+      return(NULL)
+    }
+    valid_rows <- selection_state$results[!sapply(selection_state$results, is.null)]
+    if (length(valid_rows) == 0) return(NULL)
     do.call(rbind, valid_rows)
   })
 
@@ -1027,9 +1331,10 @@ server <- function(input, output, session) {
     wall_ms <- fixed_wall_time()
     res <- benchmark_results()
     if (is.null(wall_ms) || is.null(res) || !"Time_ms" %in% names(res)) return(NULL)
+    status_suffix <- if (identical(fixed_state$status, "cancelled")) " (Stopped early by user)" else ""
     tags$div(
       style = "margin-bottom: 12px; font-size: 0.95rem; color: #495057;",
-      tags$span(tags$strong("Total Execution Time: "), sprintf("%.1f ms", wall_ms))
+      tags$span(tags$strong("Total Execution Time: "), sprintf("%.1f ms%s", wall_ms, status_suffix))
     )
   })
 
@@ -1083,9 +1388,10 @@ server <- function(input, output, session) {
     wall_ms <- selection_wall_time()
     res <- selection_results()
     if (is.null(wall_ms) || is.null(res) || !"Time_ms" %in% names(res)) return(NULL)
+    status_suffix <- if (identical(selection_state$status, "cancelled")) " (Stopped early by user)" else ""
     tags$div(
       style = "margin-bottom: 12px; font-size: 0.95rem; color: #495057;",
-      tags$span(tags$strong("Total Execution Time: "), sprintf("%.1f ms", wall_ms))
+      tags$span(tags$strong("Total Execution Time: "), sprintf("%.1f ms%s", wall_ms, status_suffix))
     )
   })
 
