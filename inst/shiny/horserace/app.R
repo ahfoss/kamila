@@ -10,7 +10,11 @@ if (requireNamespace("shiny", quietly = TRUE)) {
 # If running inside WebR / WebAssembly browser environment, automatically install packages
 if (exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1") {
   tryCatch({
-    webr::install(c("clustMixType", "clustrd", "VarSelLCM", "flexmix", "mvtnorm", "mclust", "MASS"))
+    webr_pkgs <- c(
+      "kamila", "cluster", "clustMixType", "clustrd",
+      "VarSelLCM", "flexmix", "mvtnorm", "mclust", "MASS"
+    )
+    webr::install(webr_pkgs)
   }, error = function(e) NULL)
 }
 
@@ -217,7 +221,9 @@ run_single_fixed_k <- function(m, dat, k) {
   }
 
   t_start <- proc.time()
+  cur_step <- "init"
   tryCatch({
+    cur_step <- paste0("clustering with ", m_pkg)
     if (m == "kamila") {
       res <- kamila::kamila(
         dat$conVars, dat$catVars, numClust = k, numInit = 5, maxIter = 25, calcNumClust = "none"
@@ -272,10 +278,16 @@ run_single_fixed_k <- function(m, dat, k) {
       memb <- as.integer(flexmix::clusters(f_fit))
     }
 
+    cur_step <- "timing"
     t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+    cur_step <- "ari calculation"
     ari <- calc_ari(dat$trueID, memb)
+
+    cur_step <- "misclass calculation"
     err <- calc_misclass_error(dat$trueID, memb)
 
+    cur_step <- "result formatting"
     data.frame(
       Method = m_name,
       Package = m_pkg,
@@ -292,7 +304,7 @@ run_single_fixed_k <- function(m, dat, k) {
       Time_ms = NA,
       ARI = NA,
       Error_Rate = NA,
-      Status = paste0("Error: ", conditionMessage(e)),
+      Status = sprintf("Error in [%s]: %s", cur_step, conditionMessage(e)),
       stringsAsFactors = FALSE
     )
   })
@@ -310,7 +322,9 @@ run_single_selection <- function(m, dat, true_k) {
   k_range <- 2:k_max_search
 
   t_start <- proc.time()
+  cur_step <- "init"
   tryCatch({
+    cur_step <- paste0("model selection with ", m_pkg)
     if (m == "kamila") {
       res_k <- kamila::kamila(
         conVar = dat$conVars,
@@ -466,7 +480,7 @@ run_single_selection <- function(m, dat, true_k) {
       Package = m_pkg,
       True_K = true_k,
       Predicted_K = NA,
-      Criterion = paste0("Error: ", conditionMessage(e)),
+      Criterion = sprintf("Error in [%s]: %s", cur_step, conditionMessage(e)),
       ARI = NA,
       Time_ms = NA,
       stringsAsFactors = FALSE
