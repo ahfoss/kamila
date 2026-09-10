@@ -20,9 +20,22 @@ if (exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1") {
 
 # Optional dependencies loaded conditionally for WebR compatibility
 has_pkg <- function(pkg) {
-  if (is.null(pkg) || length(pkg) == 0 || is.na(pkg[1])) return(FALSE)
+  if (is.null(pkg) || length(pkg) == 0 || !is.character(pkg) || is.na(pkg[1]) || !nzchar(pkg[1])) {
+    return(FALSE)
+  }
+  pkg_name <- as.character(pkg[1])
+  if (pkg_name %in% loadedNamespaces()) {
+    return(TRUE)
+  }
+  pkg_paths <- tryCatch(
+    find.package(pkg_name, quiet = TRUE),
+    error = function(e) character(0)
+  )
+  if (length(pkg_paths) > 0 && nzchar(pkg_paths[1])) {
+    return(TRUE)
+  }
   res <- tryCatch(
-    suppressWarnings(requireNamespace(as.character(pkg[1]), quietly = TRUE)),
+    suppressWarnings(as.logical(requireNamespace(pkg_name, quietly = TRUE))),
     error = function(e) FALSE
   )
   isTRUE(res)
@@ -73,13 +86,6 @@ calc_ari <- function(true_labels, pred_labels) {
   if (length(valid_idx) < 2) return(1.0)
   true_v <- true_v[valid_idx]
   pred_v <- pred_v[valid_idx]
-
-  if (isTRUE(has_pkg("mclust"))) {
-    ari_res <- tryCatch(mclust::adjustedRandIndex(true_v, pred_v), error = function(e) NA_real_)
-    if (!is.null(ari_res) && length(ari_res) == 1 && !is.na(ari_res)) {
-      return(as.numeric(ari_res))
-    }
-  }
 
   tab <- table(true_v, pred_v)
   n <- sum(tab)
@@ -1611,18 +1617,15 @@ server <- function(input, output, session) {
       v_list <- character(length(pkgs))
       for (i in seq_along(pkgs)) {
         p <- pkgs[i]
-        ok <- FALSE
-        try({
-          ok <- isTRUE(has_pkg(p))
-        }, silent = TRUE)
-        if (ok) {
+        ok <- isTRUE(has_pkg(p))
+        if (isTRUE(ok)) {
           ver_str <- "Installed"
-          try({
+          tryCatch({
             v_val <- as.character(utils::packageVersion(p))
             if (length(v_val) == 1 && !is.na(v_val) && nzchar(v_val)) {
               ver_str <- v_val
             }
-          }, silent = TRUE)
+          }, error = function(e) NULL)
           v_list[i] <- ver_str
         } else {
           v_list[i] <- "Not Installed (Optional)"
