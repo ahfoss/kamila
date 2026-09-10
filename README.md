@@ -23,7 +23,7 @@ Explore and benchmark KAMILA against competing mixed-type clustering algorithms 
 ---
 
 ### Run Locally in R
-To run the dashboard locally with multi-core parallel acceleration:
+To run the dashboard locally:
 
 ```r
 shiny::runGitHub(
