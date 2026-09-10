@@ -15,7 +15,14 @@ if (exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1") {
 }
 
 # Optional dependencies loaded conditionally for WebR compatibility
-has_pkg <- function(pkg) requireNamespace(pkg, quietly = TRUE)
+has_pkg <- function(pkg) {
+  if (is.null(pkg) || length(pkg) == 0 || is.na(pkg[1])) return(FALSE)
+  res <- tryCatch(
+    suppressWarnings(requireNamespace(as.character(pkg[1]), quietly = TRUE)),
+    error = function(e) FALSE
+  )
+  isTRUE(res)
+}
 
 # ------------------------------------------------------------------------------
 # Helpers: Safe Scaling, Metric Evaluation & Input Validation
@@ -1587,7 +1594,12 @@ server <- function(input, output, session) {
   output$pkg_version_table <- renderTable({
     pkgs <- c("kamila", "cluster", "clustMixType", "VarSelLCM", "flexmix", "mixtools", "mclust", "shiny")
     versions <- sapply(pkgs, function(p) {
-      if (has_pkg(p)) as.character(packageVersion(p)) else "Not Installed (Optional)"
+      if (isTRUE(has_pkg(p))) {
+        ver <- tryCatch(as.character(packageVersion(p)), error = function(e) "Installed")
+        if (length(ver) == 1 && !is.na(ver) && nzchar(ver)) ver else "Installed"
+      } else {
+        "Not Installed (Optional)"
+      }
     })
     data.frame(
       Package = pkgs,
