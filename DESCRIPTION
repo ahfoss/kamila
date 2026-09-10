@@ -38,6 +38,17 @@ LinkingTo: Rcpp
 Suggests:
     testthat,
     withr,
+    xml2,
+    shiny,
+    cluster,
+    clustMixType,
+    clustrd,
+    VarSelLCM,
+    flexmix,
+    mvtnorm,
+    mclust,
+    mixtools,
+    MASS,
     pkgload,
     covr
 Config/roxygen2/version: 8.1.0

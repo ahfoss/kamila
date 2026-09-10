@@ -1,5 +1,5 @@
 
-# kamila [![R-CMD-check](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml) [![test-coverage](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml) [![Codecov test coverage](https://codecov.io/gh/ahfoss/kamila/branch/master/graph/badge.svg)](https://app.codecov.io/gh/ahfoss/kamila) [![lint](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/grand-total/kamila)](https://cran.r-project.org/package=kamila) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/kamila)](https://cran.r-project.org/package=kamila)
+# kamila [![R-CMD-check](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/R-CMD-check.yaml) [![test-coverage](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/test-coverage.yaml) [![Codecov test coverage](https://codecov.io/gh/ahfoss/kamila/branch/master/graph/badge.svg)](https://app.codecov.io/gh/ahfoss/kamila) [![lint](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml/badge.svg)](https://github.com/ahfoss/kamila/actions/workflows/lint.yaml) [![Shinylive App](https://img.shields.io/badge/Shinylive-Interactive_Demo-blue?logo=r)](https://ahfoss.github.io/kamila/) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/grand-total/kamila)](https://cran.r-project.org/package=kamila) [![CRAN_Status_Badge](https://cranlogs.r-pkg.org/badges/kamila)](https://cran.r-project.org/package=kamila)
 
 R package for clustering mixed data. For more information, install the package and run
 
@@ -12,3 +12,24 @@ from the R terminal. For an in-depth discussion of the challenges involved in cl
  * [Foss, Markatou, and Ray (2018). Distance Metrics and Clustering Methods for Mixed-Type Data. **International Statistical Review**. DOI: 10.1111/insr.12274.](https://onlinelibrary.wiley.com/doi/abs/10.1111/insr.12274)
 
 Update May 11, 2020: Update data.frame calls to be compatible with R v4.x.x
+
+## Interactive Clustering Horse-Race App
+
+Explore and benchmark KAMILA against competing mixed-type clustering algorithms (FlexMix, PAM + Gower's distance, k-prototypes, VarSelLCM) interactively:
+
+### [🚀 Launch Live Web App (Client-Side WebAssembly)](https://ahfoss.github.io/kamila/)
+> **No installation required:** Runs 100% client-side in your web browser via **WebR & Shinylive**.
+
+---
+
+### Run Locally in R
+To run the dashboard locally with multi-core parallel acceleration:
+
+```r
+shiny::runGitHub(
+  repo = "kamila",
+  username = "ahfoss",
+  ref = "export_ci_pipeline_results",
+  subdir = "inst/shiny/horserace"
+)
+```
