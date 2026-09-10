@@ -15,7 +15,7 @@ Update May 11, 2020: Update data.frame calls to be compatible with R v4.x.x
 
 ## Interactive Clustering Horse-Race App
 
-Explore and benchmark KAMILA against competing mixed-type clustering algorithms (FlexMix, ClustMD, k-prototypes, VarSelLCM, Standard K-Means) interactively:
+Explore and benchmark KAMILA against competing mixed-type clustering algorithms (FlexMix, PAM + Gower's distance, k-prototypes, VarSelLCM) interactively:
 
 ### [🚀 Launch Live Web App (Client-Side WebAssembly)](https://ahfoss.github.io/kamila/)
 > **No installation required:** Runs 100% client-side in your web browser via **WebR & Shinylive**.
