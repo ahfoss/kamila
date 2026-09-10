@@ -1592,20 +1592,40 @@ server <- function(input, output, session) {
 
   # Package Versions
   output$pkg_version_table <- renderTable({
-    pkgs <- c("kamila", "cluster", "clustMixType", "VarSelLCM", "flexmix", "mixtools", "mclust", "shiny")
-    versions <- sapply(pkgs, function(p) {
-      if (isTRUE(has_pkg(p))) {
-        ver <- tryCatch(as.character(packageVersion(p)), error = function(e) "Installed")
-        if (length(ver) == 1 && !is.na(ver) && nzchar(ver)) ver else "Installed"
-      } else {
-        "Not Installed (Optional)"
+    tryCatch({
+      pkgs <- c("kamila", "cluster", "clustMixType", "VarSelLCM", "flexmix", "mixtools", "mclust", "shiny")
+      v_list <- character(length(pkgs))
+      for (i in seq_along(pkgs)) {
+        p <- pkgs[i]
+        ok <- FALSE
+        try({
+          ok <- isTRUE(has_pkg(p))
+        }, silent = TRUE)
+        if (ok) {
+          ver_str <- "Installed"
+          try({
+            v_val <- as.character(utils::packageVersion(p))
+            if (length(v_val) == 1 && !is.na(v_val) && nzchar(v_val)) {
+              ver_str <- v_val
+            }
+          }, silent = TRUE)
+          v_list[i] <- ver_str
+        } else {
+          v_list[i] <- "Not Installed (Optional)"
+        }
       }
+      data.frame(
+        Package = pkgs,
+        Version = v_list,
+        stringsAsFactors = FALSE
+      )
+    }, error = function(e) {
+      data.frame(
+        Package = "Status",
+        Version = paste0("Error: ", conditionMessage(e)),
+        stringsAsFactors = FALSE
+      )
     })
-    data.frame(
-      Package = pkgs,
-      Version = versions,
-      stringsAsFactors = FALSE
-    )
   }, striped = TRUE, bordered = TRUE)
 }
 
