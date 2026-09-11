@@ -167,3 +167,26 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// kamilaLoopCpp
+List kamilaLoopCpp(Nullable<NumericMatrix> conVarMat_, Nullable<IntegerMatrix> catFactorNum_, NumericVector conWeights, NumericVector catWeights, Nullable<NumericMatrix> initMeans_, Nullable<List> initLogProbs_, IntegerVector numLev, double catBw, int numClust, int maxIter, bool verbose, bool hasCon, bool hasCat);
+RcppExport SEXP _kamila_kamilaLoopCpp(SEXP conVarMat_SEXP, SEXP catFactorNum_SEXP, SEXP conWeightsSEXP, SEXP catWeightsSEXP, SEXP initMeans_SEXP, SEXP initLogProbs_SEXP, SEXP numLevSEXP, SEXP catBwSEXP, SEXP numClustSEXP, SEXP maxIterSEXP, SEXP verboseSEXP, SEXP hasConSEXP, SEXP hasCatSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Nullable<NumericMatrix> >::type conVarMat_(conVarMat_SEXP);
+    Rcpp::traits::input_parameter< Nullable<IntegerMatrix> >::type catFactorNum_(catFactorNum_SEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type conWeights(conWeightsSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type catWeights(catWeightsSEXP);
+    Rcpp::traits::input_parameter< Nullable<NumericMatrix> >::type initMeans_(initMeans_SEXP);
+    Rcpp::traits::input_parameter< Nullable<List> >::type initLogProbs_(initLogProbs_SEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type numLev(numLevSEXP);
+    Rcpp::traits::input_parameter< double >::type catBw(catBwSEXP);
+    Rcpp::traits::input_parameter< int >::type numClust(numClustSEXP);
+    Rcpp::traits::input_parameter< int >::type maxIter(maxIterSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< bool >::type hasCon(hasConSEXP);
+    Rcpp::traits::input_parameter< bool >::type hasCat(hasCatSEXP);
+    rcpp_result_gen = Rcpp::wrap(kamilaLoopCpp(conVarMat_, catFactorNum_, conWeights, catWeights, initMeans_, initLogProbs_, numLev, catBw, numClust, maxIter, verbose, hasCon, hasCat));
+    return rcpp_result_gen;
+END_RCPP
+}
