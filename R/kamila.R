@@ -618,7 +618,10 @@ kamila <- function(
     objectiveVect <- rep(NaN, numInit)
 
     # for verbose output, list of memberships for each init, iter
-    if (verbose) membLongList <- rep(list(list()), numInit)
+    if (verbose) {
+      membLongList <- rep(list(list()), numInit)
+      lastCatLogLiksMat <- NULL
+    }
 
     # (1) loop over each initialization
     for (init in 1:numInit) {
@@ -643,100 +646,29 @@ kamila <- function(
         logProbsCond_i <- list()
       }
 
-      # initialize structures for iterative procedure
-      membOld <- membNew <- rep(0, numObs)
-      numIter <- 0
-      degenerateSoln <- FALSE
+      # Run C++ convergence loop with pre-allocated scratch buffers
+      loopRes <- kamilaLoopCpp(
+        conVarMat_ = if (hasCon) conVarMat else NULL,
+        catFactorNum_ = if (hasCat) catFactorNumeric else NULL,
+        conWeights = conWeights,
+        catWeights = catWeights,
+        initMeans_ = means_i,
+        initLogProbs_ = logProbsCond_i,
+        numLev = if (hasCat) numLev else integer(0),
+        catBw = catBw,
+        numClust = numClust,
+        maxIter = maxIter,
+        verbose = verbose,
+        hasCon = hasCon,
+        hasCat = hasCat
+      )
 
-      # Loop until convergence
-      while (
-        ((numIter < 3) || !all(membOld == membNew)) &&
-          (numIter < maxIter)
-      ) {
-        numIter <- numIter + 1
+      totalLogLikVect[init] <- loopRes$totalLogLik
+      numIterVect[init] <- loopRes$numIter
 
-        if (hasCon) {
-          dist_i <- dptm(
-            pts = conVarMat,
-            myMeans = means_i,
-            wgts = conWeights,
-            ppDim = numConVar,
-            kkMean = numClust,
-            nn = numObs
-          )
-          minDist_i <- rowMin(dist_i)
-
-          logDistRadDens_i <- radialKDE(
-            radii = minDist_i,
-            evalPoints = dist_i,
-            pdim = numConVar,
-            returnFun = returnResampler,
-            takeLog = TRUE
-          )$kdes
-        }
-
-        if (hasCat) {
-          catLogLiks <- calcCatLogLiks(
-            catFactorNum = catFactorNumeric,
-            catWeights = catWeights,
-            logProbsCond_i = logProbsCond_i
-          )
-        }
-
-        if (hasCon && hasCat) {
-          allLogLiks <- logDistRadDens_i + catLogLiks
-        } else if (hasCon) {
-          allLogLiks <- logDistRadDens_i
-        } else {
-          allLogLiks <- catLogLiks
-        }
-
-        # partition data into clusters
-        membOld <- membNew
-        membNew <- as.integer(rowMaxInds(allLogLiks))
-
-        # calculate new means / probabilities
-        if (hasCon) {
-          means_i <- aggregateMeans(
-            conVar = conVarMat,
-            membNew = membNew,
-            kk = numClust
-          )
-        }
-
-        if (hasCat) {
-          logProbsCond_i <- updateLogProbs(
-            catFactorNum = catFactorNumeric,
-            membNew = membNew,
-            numLev = numLev,
-            catBw = catBw,
-            kk = numClust
-          )
-        }
-
-        if (verbose) {
-          membLongList[[init]][[numIter]] <- membOld
-        }
-
-        if (any(tabulate(membNew, numClust) == 0L)) {
-          degenerateSoln <- TRUE
-          break
-        }
-      }
-
-      # Store log likelihood for each initialization
-      if (degenerateSoln) {
-        totalLogLikVect[init] <- -Inf
-      } else {
-        totalLogLikVect[init] <- sum(rowMax(allLogLiks))
-      }
-
-      numIterVect[init] <- numIter
-
-      # other useful internal measures of cluster quality
-      if (hasCat) catLogLikVect[init] <- sum(rowMax(catLogLiks))
+      if (hasCat) catLogLikVect[init] <- loopRes$catLogLik
       if (hasCon) {
-        winDistVect[init] <- sum(dist_i[1:numObs + (membNew - 1L) * numObs])
+        winDistVect[init] <- loopRes$winDist
         winToBetRat <- winDistVect[init] / (totalDist - winDistVect[init])
         if (winToBetRat < 0) winToBetRat <- 100
       }
@@ -746,7 +678,7 @@ kamila <- function(
       } else if (hasCon) {
         objectiveVect[init] <- totalLogLikVect[init]
       } else {
-        objectiveVect[init] <- if (degenerateSoln) -Inf else catLogLikVect[init]
+        objectiveVect[init] <- if (loopRes$degenerateSoln) -Inf else catLogLikVect[init]
       }
 
       # Store current solution if objective beats all others
@@ -756,14 +688,14 @@ kamila <- function(
       ) {
         finalLogLik <- totalLogLikVect[init]
         finalObj <- objectiveVect[init]
-        finalMemb <- membNew
+        finalMemb <- loopRes$finalMemb
         if (hasCon) {
           finalCenters <- matrix(
-            data = as.matrix(means_i),
-            nrow = nrow(means_i),
+            data = as.matrix(loopRes$finalMeans),
+            nrow = nrow(loopRes$finalMeans),
             ncol = numConVar,
             dimnames = list(
-              cluster = paste("Clust", seq_len(nrow(means_i))),
+              cluster = paste("Clust", seq_len(nrow(loopRes$finalMeans))),
               variableMean = paste("Mean", seq_len(numConVar))
             )
           )
@@ -772,22 +704,26 @@ kamila <- function(
         }
 
         if (hasCat) {
-          finalProbs <- lapply(logProbsCond_i, exp)
+          finalProbs <- lapply(loopRes$finalLogProbs, exp)
           names(finalProbs) <- paste("Categorical Variable", seq_len(numCatVar))
         } else {
           finalProbs <- list()
         }
-        finalClustSize <- table(membNew)
+        finalClustSize <- table(loopRes$finalMemb)
       }
 
-      if (verbose) membLongList[[init]][[numIter + 1]] <- membNew
+      if (verbose) {
+        membLongList[[init]] <- loopRes$membHistory
+        membLongList[[init]][[loopRes$numIter + 1]] <- loopRes$finalMemb
+        lastCatLogLiksMat <- loopRes$catLogLiks
+      }
     }
 
     # 12 Prepare output data structure
     if (verbose) {
       optionalOutput <- list(
         totalLogLikVect = totalLogLikVect,
-        catLogLikVect = if (hasCat) catLogLiks else NULL,
+        catLogLikVect = if (hasCat) lastCatLogLiksMat else NULL,
         winDistVect = if (hasCon) winDistVect else NULL,
         totalDist = if (hasCon) totalDist else NULL,
         objectiveVect = objectiveVect,

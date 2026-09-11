@@ -459,4 +459,20 @@ test_that("radialKDE legacy returnFun option and zero categorical bandwidth", {
   catLiks5 <- kamila:::calcCatLogLiks(catNumSmall, catWgts, lp5)
   expect_equal(dim(catLiks5), c(3, 5))
   expect_true(all(is.finite(catLiks5)))
+
+  # 6. Standalone aggregateMeans (including non-empty and empty cluster)
+  conMatTest <- matrix(c(1.0, 2.0, 3.0, 4.0, 5.0, 6.0), nrow = 3, ncol = 2)
+  membTest <- as.integer(c(1, 1, 2))
+  meansAggr <- kamila:::aggregateMeans(conMatTest, membTest, kk = 3)
+  expect_equal(dim(meansAggr), c(3, 2))
+  expect_equal(meansAggr[1, 1], 1.5)
+  expect_equal(meansAggr[2, 1], 3.0)
+  expect_equal(meansAggr[3, 1], 0.0) # empty cluster
+
+  # 7. Standalone updateLogProbs with smoothing (catBw > 0)
+  lps_smooth <- kamila:::updateLogProbs(catNum, memb, numLev, catBw = 0.05, kk = 2)
+  expect_equal(length(lps_smooth), 2)
+  expect_true(is.matrix(lps_smooth[[1]]))
+  expect_equal(dim(lps_smooth[[1]]), c(2, 3))
+  expect_true(all(is.finite(lps_smooth[[1]])))
 })

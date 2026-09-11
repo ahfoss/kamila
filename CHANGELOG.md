@@ -5,6 +5,15 @@ All notable changes to the **kamila** R package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **End-to-End C++ Iteration Engine (`kamilaLoopCpp`)**: Implemented the core while convergence loop in C++ with pre-allocated scratch buffers (`distMat`, `minDist`, `catLogLiks`, `allLogLiks`, `membOld`, `membNew`), achieving near-zero heap memory allocations in the iteration loop (#49).
+- **Native C++ Linear Binning & Gaussian Convolution**: Integrated fast $O(N)$ histogram accumulation and discrete Gaussian convolution directly in C++, removing the dependency on calling R's `KernSmooth::bkde` inside the loop (#49).
+
+### Changed
+- **CRAN Compliance & Cleanup**: Updated `.Rbuildignore` to ignore non-package root files and fixed `inherits(fac, "factor")` in `R/misc_functions.R`.
+
 ---
 
 ## [0.1.3] - 2026-09-07
