@@ -13,7 +13,7 @@ from the R terminal. For an in-depth discussion of the challenges involved in cl
 
 Update May 11, 2020: Update data.frame calls to be compatible with R v4.x.x
 
-## Interactive Clustering Horse-Race App
+## [Under Construction] Interactive Clustering Horse-Race App
 
 Explore and benchmark KAMILA against competing mixed-type clustering algorithms (FlexMix, PAM + Gower's distance, k-prototypes, VarSelLCM) interactively:
 
