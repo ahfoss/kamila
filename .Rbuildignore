@@ -6,6 +6,8 @@
 ^CONTRIBUTING\.md$
 ^\.lintr$
 ^codecov\.yml$
+^SUPERIORITY_TESTING\.md$
+^inst/benchmarks$
 ^docs$
 ^\.git$
 ^\.gitattributes$
