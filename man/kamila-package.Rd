@@ -21,65 +21,36 @@ DS Modha and S Spangler (2003). Feature weighting in k-means clustering. Machine
 
 \examples{
 \dontrun{
-# import and format a mixed-type data set
-data(Byar, package='clustMD')
-Byar$logSpap <- log(Byar$Serum.prostatic.acid.phosphatase)
-conInd <- c(5,6,8:10,16)
-conVars <- Byar[,conInd]
-conVars <- data.frame(scale(conVars))
-
-catVarsFac <- Byar[,-c(1:2,conInd,11,14,15)]
-catVarsFac[] <- lapply(catVarsFac, factor)
+# Generate a synthetic mixed-type dataset
+set.seed(123)
+dat <- genMixedData(100, 2, 2,
+  nCatLevels = 4, nConWithErr = 1, nCatWithErr = 1,
+  popProportions = c(0.3, 0.7), conErrLev = 0.3, catErrLev = 0.2
+)
+conVars <- data.frame(scale(dat$conVars))
+catVarsFac <- data.frame(lapply(as.data.frame(dat$catVars), factor))
 catVarsDum <- dummyCodeFactorDf(catVarsFac)
 
-# Modha-Spangler clustering with kmeans default Hartigan-Wong algorithm
-gmsResHw <- gmsClust(conVars, catVarsDum, nclust = 3)
+# Modha-Spangler clustering with default Hartigan-Wong algorithm
+gmsResHw <- gmsClust(conVars, catVarsDum, nclust = 2)
 
-# Modha-Spangler clustering with kmeans Forgy-Lloyd algorithm
+# Modha-Spangler clustering with Lloyd algorithm
 # NOTE searchDensity should be >= 10 for optimal performance:
 # this is just a syntax demo
-gmsResLloyd <- gmsClust(conVars, catVarsDum, nclust = 3,
+gmsResLloyd <- gmsClust(conVars, catVarsDum, nclust = 2,
   algorithm = "Lloyd", searchDensity = 3)
 
 # KAMILA clustering with fixed number of clusters
-kamRes <- kamila(conVars, catVarsFac, numClust=3, numInit=10)
+kamRes <- kamila(conVars, catVarsFac, numClust = 2, numInit = 10)
 
 # KAMILA clustering with prediction strength estimation for number of clusters
-kamPsRes <- kamila(conVars, catVarsFac, numClust=2:4, numInit=10,
-  calcNumClust="ps", numPredStrCvRun=10, predStrThresh=0.8)
+kamPsRes <- kamila(conVars, catVarsFac, numClust = 2:3, numInit = 10,
+  calcNumClust = "ps", numPredStrCvRun = 5, predStrThresh = 0.5)
 kamPsRes$nClust$bestNClust
 
-# Plot results
-ternarySurvival <- factor(Byar$SurvStat)
-levels(ternarySurvival) <- c('Alive','DeadProst','DeadOther')[c(1,2,rep(3,8))]
-plottingData <- cbind(
-  conVars,
-  catVarsFac,
-  KamilaCluster = factor(kamRes$finalMemb),
-  MSCluster = factor(gmsResHw$results$cluster))
-plottingData$Bone.metastases <- ifelse(
-  plottingData$Bone.metastases == '1', yes='Yes',no='No')
-
-# Plot Modha-Spangler/Hartigan-Wong results
-msPlot <- ggplot(
-  plottingData,
-  aes(
-    x=logSpap,
-    y=Index.of.tumour.stage.and.histolic.grade,
-    color=ternarySurvival,
-    shape=MSCluster))
-plotOpts <- function(pl) (pl + geom_point() + 
-  scale_shape_manual(values=c(2,3,7)) + geom_jitter())
-plotOpts(msPlot)
-
-# Plot KAMILA results
-kamPlot <- ggplot(
-  plottingData,
-  aes(
-    x=logSpap,
-    y=Index.of.tumour.stage.and.histolic.grade,
-    color=ternarySurvival,
-    shape=KamilaCluster))
-plotOpts(kamPlot)
+# Plot results using base R graphics
+plot(conVars[, 1], conVars[, 2], col = kamRes$finalMemb, pch = 19,
+  main = "KAMILA Clusters", xlab = "Continuous Variable 1",
+  ylab = "Continuous Variable 2")
 }
 }

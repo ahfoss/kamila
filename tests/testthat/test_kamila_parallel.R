@@ -1,6 +1,13 @@
 test_that("kamila validates numCores input parameter", {
-  conVar <- data.frame(x = rnorm(30), y = rnorm(30), stringsAsFactors = TRUE)
-  catFactor <- data.frame(f = factor(rep(c("A", "B", "C"), 10)), stringsAsFactors = TRUE)
+  conVar <- data.frame(
+    x = c(rep(0, 15), rep(10, 15)),
+    y = c(rep(0, 15), rep(10, 15)),
+    stringsAsFactors = TRUE
+  )
+  catFactor <- data.frame(
+    f = factor(rep(c("A", "B"), each = 15)),
+    stringsAsFactors = TRUE
+  )
 
   # Valid integer numCores = 1 does not throw error
   expect_error(

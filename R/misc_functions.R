@@ -1,6 +1,12 @@
-# For some reason standard importing isn't working for plyr.
-# Workaround:
-#' @import plyr
+#################
+# Internal Dirichlet random variable generator (replaces gtools::rdirichlet)
+#' @importFrom stats rgamma
+rdirichlet <- function(n, alpha) {
+  l <- length(alpha)
+  x <- matrix(stats::rgamma(l * n, alpha), ncol = l, byrow = TRUE)
+  sm <- x %*% rep(1, l)
+  x / as.vector(sm)
+}
 
 #################
 # Dummy coding of a single factor variable.
@@ -90,18 +96,18 @@ withinClusterDist <- function(dat, centroids, distFun, memberships) {
     stop("Must include at least one centroid.")
   }
   centroids <- as.data.frame(centroids)
-  clusterDists <- ddply(
-    .data = cbind(as.data.frame(dat), clust_uNiQuE = factor(memberships)),
-    ~clust_uNiQuE,
-    function(dd) {
-      data.frame(dist = sum(distFromData2Centroid(
-        dat = data.frame(dd[, -ncol(dd)]),
-        centroid = data.frame(centroids[dd$clust_uNiQuE[1], ]),
-        distFun = distFun
-      )), stringsAsFactors = TRUE)
-    }
-  )
-  return(sum(clusterDists$dist))
+  dat <- as.data.frame(dat)
+  totalDist <- 0
+  for (cl in unique(memberships)) {
+    subDat <- dat[memberships == cl, , drop = FALSE]
+    cl_idx <- if (is.numeric(cl)) cl else as.numeric(as.character(cl))
+    totalDist <- totalDist + sum(distFromData2Centroid(
+      dat = subDat,
+      centroid = data.frame(centroids[cl_idx, , drop = FALSE]),
+      distFun = distFun
+    ))
+  }
+  return(totalDist)
 }
 
 

@@ -7,11 +7,8 @@ export(genMixedData)
 export(gmsClust)
 export(kamila)
 export(wkmeans)
-import(plyr)
 importFrom(KernSmooth,bkde)
 importFrom(Rcpp,sourceCpp)
-importFrom(abind,abind)
-importFrom(gtools,rdirichlet)
 importFrom(parallel,
   clusterCall,
   clusterExport,
@@ -27,6 +24,7 @@ importFrom(stats,
   mahalanobis,
   qnorm,
   quantile,
+  rgamma,
   rnorm,
   runif,
   sd,
