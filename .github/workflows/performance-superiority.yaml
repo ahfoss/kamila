@@ -18,8 +18,12 @@ on:
 jobs:
   benchmark-superiority:
     name: Statistical Superiority Benchmark
-    # Only execute if the PR is labeled 'benchmark' or if triggered manually
-    if: contains(github.event.pull_request.labels.*.name, 'benchmark') || github.event_name == 'workflow_dispatch'
+    # Only execute if the PR is labeled 'benchmark', titled [benchmark], or triggered manually
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'benchmark' ||
+      contains(github.event.pull_request.labels.*.name, 'benchmark') ||
+      contains(github.event.pull_request.title, '[benchmark]')
     runs-on: ubuntu-latest
 
     env:
