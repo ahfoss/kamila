@@ -50,7 +50,7 @@ For an in-depth discussion of the challenges involved in clustering mixed-type d
 * [Foss, Markatou, and Ray (2018). Distance Metrics and Clustering Methods for Mixed-Type Data. **International Statistical Review**. DOI: 10.1111/insr.12274.](https://onlinelibrary.wiley.com/doi/abs/10.1111/insr.12274)
 
 ## Updates & Changelog
-For release notes and version history, see [CHANGELOG.md](./CHANGELOG.md).
+For release notes and version history, see CHANGELOG.md.
 
 ## [Under Construction] Interactive Clustering Horse-Race App
 
@@ -75,4 +75,4 @@ shiny::runGitHub(
 
 ## Performance Benchmarking & Superiority Testing
 
-For contributors proposing algorithmic speedups, `kamila` includes a statistical superiority testing framework. For details on how to run local benchmarks or trigger CI via PR labels, see [SUPERIORITY_TESTING.md](./SUPERIORITY_TESTING.md).
+For contributors proposing algorithmic speedups, `kamila` includes a statistical superiority testing framework. For details on how to run local benchmarks or trigger CI via PR labels, see SUPERIORITY_TESTING.md.
