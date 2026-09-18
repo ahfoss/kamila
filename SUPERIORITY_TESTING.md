@@ -24,6 +24,9 @@ Benchmarked execution times on modern operating systems are inherently right-ske
 
 We use the **two-sample Mann-Whitney U test** (Wilcoxon rank-sum test), which makes no distributional assumptions about runtime normality and evaluates stochastic dominance between candidate and baseline runtimes.
 
+### Deterministic Dataset Generation (Seed Control)
+For each benchmark replication $i \in \{1, \dots, \text{runs}\}$, the random number generator is initialized with `set.seed(seed + i)`. This guarantees that iteration $i$ of the baseline and iteration $i$ of the candidate are evaluated on the **exact same synthetic dataset**, eliminating between-dataset sampling variation.
+
 ### Superiority Hypothesis with Margin $\delta$
 Let $\text{Location}_{\text{base}}$ and $\text{Location}_{\text{cand}}$ denote the median runtime parameters of the baseline and candidate implementations, respectively.
 
