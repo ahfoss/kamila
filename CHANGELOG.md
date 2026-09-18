@@ -7,14 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.1.4] - 2026-09-18
+
 ### Added
 - **R-hub v2 Multi-Platform & Sanitizer Workflow**: Configured R-hub v2 via `.github/workflows/rhub.yaml` to enable on-demand pre-flight CRAN checks, multi-platform container testing, and compiler sanitizer runs (ASAN, UBSAN, Valgrind) via `rhub::rhub_check()`.
-- **End-to-End C++ Iteration Engine (`kamilaLoopCpp`)**: Implemented the core while convergence loop in C++ with pre-allocated scratch buffers (`distMat`, `minDist`, `catLogLiks`, `allLogLiks`, `membOld`, `membNew`), achieving near-zero heap memory allocations in the iteration loop (#49).
-- **Native C++ Linear Binning & Gaussian Convolution**: Integrated fast $O(N)$ histogram accumulation and discrete Gaussian convolution directly in C++, removing the dependency on calling R's `KernSmooth::bkde` inside the loop (#49).
-- **$O(N)$ Quantile Selection & Cache-Coherent Streaming**: Replaced $O(N \log N)$ sorting with `std::nth_element` for exact type-7 quantile bandwidth determination, inlined distance/minDist calculations, and implemented contiguous column-streaming for categorical lookups, demonstrating statistically significant performance superiority across Small, Medium, and Large datasets (#49).
+- **End-to-End C++ Iteration Engine (`kamilaLoopCpp`)**: Implemented the core while convergence loop in C++ with pre-allocated scratch buffers (`distMat`, `minDist`, `catLogLiks`, `allLogLiks`, `membOld`, `membNew`), achieving near-zero heap memory allocations in the iteration loop (#49, #61).
+- **Native C++ Linear Binning & Gaussian Convolution**: Integrated fast $O(N)$ histogram accumulation and discrete Gaussian convolution directly in C++, removing the dependency on calling R's `KernSmooth::bkde` inside the loop (#49, #61).
+- **$O(N)$ Quantile Selection & Cache-Coherent Streaming**: Replaced $O(N \log N)$ sorting with `std::nth_element` for exact type-7 quantile bandwidth determination, inlined distance/minDist calculations, and implemented contiguous column-streaming for categorical lookups, demonstrating statistically significant performance superiority across Small, Medium, and Large datasets (#49, #61).
+- **Interactive Horse-Race Web App (WebR / Shinylive)**: Built and deployed a zero-install interactive benchmark web app running client-side via Shinylive and WebAssembly (#62, #64).
+- **Statistical Superiority Testing Framework**: Added automated benchmarking and performance regression testing suite (`inst/benchmarks/run_superiority_benchmark.R`) with CI verification workflow (#63).
 
 ### Changed
 - **CRAN Compliance & Cleanup**: Updated `.Rbuildignore` to ignore non-package root files and fixed `inherits(fac, "factor")` in `R/misc_functions.R`.
+- **Documentation & Badges**: Added CRAN version badge, GPL-3 license badge, quick installation guide, and reproducible quick-start clustering example to `README.md`.
 
 ---
 
