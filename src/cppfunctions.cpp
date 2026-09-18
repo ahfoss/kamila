@@ -852,6 +852,7 @@ List kamilaLoopCpp(
     if (hasCon) {
       // (a) dptm
       const double* p_means = currentMeans.data();
+      double maxEval = 0.0;
       for (int j = 0; j < numClust; ++j) {
         double* out_col = distMat.data() + j * nn;
         std::fill(out_col, out_col + nn, 0.0);
@@ -875,26 +876,28 @@ List kamilaLoopCpp(
           }
         }
 
-        for (int i = 0; i < nn; ++i) {
-          out_col[i] = std::sqrt(out_col[i]);
+        if (j == 0) {
+          double max_d = 0.0;
+          for (int i = 0; i < nn; ++i) {
+            double d = std::sqrt(out_col[i]);
+            out_col[i] = d;
+            minDist[i] = d;
+            if (d > max_d) max_d = d;
+          }
+          maxEval = max_d;
+        } else {
+          double max_d = maxEval;
+          for (int i = 0; i < nn; ++i) {
+            double d = std::sqrt(out_col[i]);
+            out_col[i] = d;
+            if (d < minDist[i]) minDist[i] = d;
+            if (d > max_d) max_d = d;
+          }
+          maxEval = max_d;
         }
       }
 
-      // (b) rowMin & maxEval
-      double maxEval = distMat[0];
-      for (int i = 0; i < nn; ++i) {
-        minDist[i] = distMat[i];
-      }
-      for (int j = 0; j < numClust; ++j) {
-        const double* col_ptr = distMat.data() + j * nn;
-        for (int i = 0; i < nn; ++i) {
-          double d = col_ptr[i];
-          if (j > 0 && d < minDist[i]) minDist[i] = d;
-          if (d > maxEval) maxEval = d;
-        }
-      }
-
-      // (c) radial KDE: bw.nrd0
+      // (b) radial KDE: bw.nrd0
       double mean_r = 0.0;
       for (int i = 0; i < nn; ++i) {
         r_sorted[i] = minDist[i];
@@ -909,22 +912,28 @@ List kamilaLoopCpp(
       }
       double hi = (nn > 1) ? std::sqrt(var_r / (nn - 1.0)) : 0.0;
 
-      std::sort(r_sorted.begin(), r_sorted.end());
+      // Type 7 quantile using O(N) std::nth_element instead of O(N log N) std::sort
+      double index25 = 1.0 + (nn - 1.0) * 0.25;
+      int lo25 = std::max(0, std::min(nn - 1, static_cast<int>(std::floor(index25)) - 1));
+      int hi25 = std::max(0, std::min(nn - 1, static_cast<int>(std::ceil(index25)) - 1));
+      double g25 = index25 - std::floor(index25);
 
-      auto get_quantile_7 = [&](double p_prob) {
-        double index = 1.0 + (nn - 1.0) * p_prob;
-        int lo = static_cast<int>(std::floor(index));
-        int hi_idx = static_cast<int>(std::ceil(index));
-        double g = index - lo;
-        if (lo == hi_idx || lo >= nn) {
-          return r_sorted[std::min(lo - 1, nn - 1)];
-        } else {
-          return (1.0 - g) * r_sorted[lo - 1] + g * r_sorted[hi_idx - 1];
-        }
-      };
+      double index75 = 1.0 + (nn - 1.0) * 0.75;
+      int lo75 = std::max(0, std::min(nn - 1, static_cast<int>(std::floor(index75)) - 1));
+      int hi75 = std::max(0, std::min(nn - 1, static_cast<int>(std::ceil(index75)) - 1));
+      double g75 = index75 - std::floor(index75);
 
-      double q25 = get_quantile_7(0.25);
-      double q75 = get_quantile_7(0.75);
+      std::nth_element(r_sorted.begin(), r_sorted.begin() + lo25, r_sorted.end());
+      double v_lo25 = r_sorted[lo25];
+      std::nth_element(r_sorted.begin() + lo25 + 1, r_sorted.begin() + hi25, r_sorted.end());
+      double v_hi25 = r_sorted[hi25];
+      double q25 = (lo25 == hi25) ? v_lo25 : ((1.0 - g25) * v_lo25 + g25 * v_hi25);
+
+      std::nth_element(r_sorted.begin() + hi25 + 1, r_sorted.begin() + lo75, r_sorted.end());
+      double v_lo75 = r_sorted[lo75];
+      std::nth_element(r_sorted.begin() + lo75 + 1, r_sorted.begin() + hi75, r_sorted.end());
+      double v_hi75 = r_sorted[hi75];
+      double q75 = (lo75 == hi75) ? v_lo75 : ((1.0 - g75) * v_lo75 + g75 * v_hi75);
       double iqr = q75 - q25;
 
       double lo = std::min(hi, iqr / 1.34);
@@ -1063,32 +1072,31 @@ List kamilaLoopCpp(
         }
       }
 
-      for (int q = 0; q < qq; ++q) {
-        if (catWeights[q] == 0.0) continue;
-        const int* q_col = p_cat + q * nn;
-        const double* w_tab = weightedTabs[q].data();
-
-        for (int i = 0; i < nn; ++i) {
-          const double* w_row = w_tab + (q_col[i] - 1) * numClust;
-          for (int cl = 0; cl < numClust; ++cl) {
-            catLogLiks[i + cl * nn] += w_row[cl];
+      for (int cl = 0; cl < numClust; ++cl) {
+        double* cl_col = catLogLiks.data() + cl * nn;
+        double* all_col = allLogLiks.data() + cl * nn;
+        for (int q = 0; q < qq; ++q) {
+          if (catWeights[q] == 0.0) continue;
+          const int* q_col = p_cat + q * nn;
+          const double* w_tab = weightedTabs[q].data() + cl;
+          for (int i = 0; i < nn; ++i) {
+            cl_col[i] += w_tab[(q_col[i] - 1) * numClust];
           }
         }
-      }
-
-      // Combine into allLogLiks
-      if (hasCon) {
-        for (int i = 0; i < nn * numClust; ++i) {
-          allLogLiks[i] += catLogLiks[i];
+        if (hasCon) {
+          for (int i = 0; i < nn; ++i) {
+            all_col[i] += cl_col[i];
+          }
+        } else {
+          std::copy(cl_col, cl_col + nn, all_col);
         }
-      } else {
-        std::copy(catLogLiks.begin(), catLogLiks.end(), allLogLiks.begin());
       }
     }
 
     // 3. Partition data into clusters: membOld <- membNew, membNew <- rowMaxInds(allLogLiks)
     std::copy(membNew.begin(), membNew.end(), membOld.begin());
 
+    std::fill(countVec.begin(), countVec.end(), 0.0);
     for (int i = 0; i < nn; ++i) {
       double maxVal = allLogLiks[i];
       int maxIdx = 1;
@@ -1100,12 +1108,7 @@ List kamilaLoopCpp(
         }
       }
       membNew[i] = maxIdx;
-    }
-
-    // 4. Update means: aggregateMeans
-    std::fill(countVec.begin(), countVec.end(), 0.0);
-    for (int n = 0; n < nn; ++n) {
-      countVec[membNew[n] - 1] += 1.0;
+      countVec[maxIdx - 1] += 1.0;
     }
 
     if (hasCon) {
