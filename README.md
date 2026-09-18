@@ -14,10 +14,6 @@ from the R terminal. For an in-depth discussion of the challenges involved in cl
 ## Updates
 For updates, see [Changelog](CHANGELOG.md).
 
-## Performance Benchmarking & Superiority Testing
-
-For contributors proposing algorithmic speedups, `kamila` includes a statistical superiority testing framework. For details on how to run local benchmarks or trigger CI via PR labels, see [SUPERIORITY_TESTING.md](SUPERIORITY_TESTING.md).
-
 ## [Under Construction] Interactive Clustering Horse-Race App
 
 Explore and benchmark KAMILA against competing mixed-type clustering algorithms (FlexMix, PAM + Gower's distance, k-prototypes, VarSelLCM) interactively:
@@ -34,7 +30,11 @@ To run the dashboard locally:
 shiny::runGitHub(
   repo = "kamila",
   username = "ahfoss",
-  ref = "export_ci_pipeline_results",
+  ref = "master",
   subdir = "inst/shiny/horserace"
 )
 ```
+
+## Performance Benchmarking & Superiority Testing
+
+For contributors proposing algorithmic speedups, `kamila` includes a statistical superiority testing framework. For details on how to run local benchmarks or trigger CI via PR labels, see [SUPERIORITY_TESTING.md](SUPERIORITY_TESTING.md).
