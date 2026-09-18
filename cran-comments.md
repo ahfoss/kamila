@@ -3,7 +3,7 @@
 ### Test environments
 * local Windows (x86_64-w64-mingw32, R 4.5.3)
 * GitHub Actions:
-  * Ubuntu (R-release, R-devel)
+  * Ubuntu (R-release, R-devel, R-oldrel)
   * macOS (R-release)
   * Windows (R-release)
 
