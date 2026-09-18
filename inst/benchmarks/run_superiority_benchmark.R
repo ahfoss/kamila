@@ -77,10 +77,12 @@ run_worker <- function(lib_path, tier_name, runs, seed) {
     stop("Unknown tier: ", tier_name)
   }
 
-  set.seed(seed)
   runtimes <- numeric(runs)
 
   for (i in seq_len(runs)) {
+    # Set seed per iteration to guarantee identical datasets across variants
+    set.seed(seed + i)
+
     # Generate mixed data
     dat <- kamila::genMixedData(
       sampSize = tier$sampSize,
@@ -372,7 +374,7 @@ main <- function() {
       lib_path = parsed$cand_lib,
       tier_name = t_name,
       runs = total_runs,
-      seed = parsed$seed + 1000
+      seed = parsed$seed
     )
     cat(sprintf(" Done (Median = %s).\n", format_time(median(cand_times))))
 
