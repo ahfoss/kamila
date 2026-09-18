@@ -11,7 +11,12 @@ from the R terminal. For an in-depth discussion of the challenges involved in cl
  * [Foss and Markatou (2018). kamila: Clustering Mixed-Type Data in R and Hadoop. **Journal of Statistical Software**, 83(13). DOI: 10.18637/jss.v083.i13](https://www.jstatsoft.org/article/view/v083i13)
  * [Foss, Markatou, and Ray (2018). Distance Metrics and Clustering Methods for Mixed-Type Data. **International Statistical Review**. DOI: 10.1111/insr.12274.](https://onlinelibrary.wiley.com/doi/abs/10.1111/insr.12274)
 
+## Updates
 For updates, see [Changelog](CHANGELOG.md).
+
+## Performance Benchmarking & Superiority Testing
+
+For contributors proposing algorithmic speedups, `kamila` includes a statistical superiority testing framework. For details on how to run local benchmarks or trigger CI via PR labels, see [SUPERIORITY_TESTING.md](SUPERIORITY_TESTING.md).
 
 ## [Under Construction] Interactive Clustering Horse-Race App
 

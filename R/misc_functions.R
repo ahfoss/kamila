@@ -15,7 +15,7 @@ rdirichlet <- function(n, alpha) {
 # consistent; as opposed to regression coding with an intercept
 # and a dropped level etc.
 dummyCodeOneVar <- function(fac) {
-  if (class(fac) != "factor") fac <- factor(fac)
+  if (!inherits(fac, "factor")) fac <- factor(fac)
   lev <- levels(fac)
   mapply(
     lev,

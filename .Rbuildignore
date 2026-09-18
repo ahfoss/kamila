@@ -6,6 +6,11 @@
 ^CONTRIBUTING\.md$
 ^\.lintr$
 ^codecov\.yml$
+^SUPERIORITY_TESTING\.md$
+^inst/benchmarks$
 ^docs$
 ^\.git$
 ^\.gitattributes$
+^CHANGELOG\.md$
+^kamila.*\.tar\.gz$
+^kamila\.Rcheck$
