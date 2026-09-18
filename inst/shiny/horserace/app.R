@@ -10,16 +10,61 @@ if (requireNamespace("shiny", quietly = TRUE)) {
 # If running inside WebR / WebAssembly browser environment, automatically install packages
 if (exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1") {
   tryCatch({
-    webr::install(c("clustMixType", "clustrd", "VarSelLCM", "flexmix", "mvtnorm", "mclust", "MASS"))
+    webr_pkgs <- c(
+      "kamila", "cluster", "clustMixType", "clustrd",
+      "VarSelLCM", "flexmix", "mvtnorm", "mclust", "MASS"
+    )
+    webr::install(webr_pkgs)
   }, error = function(e) NULL)
 }
 
 # Optional dependencies loaded conditionally for WebR compatibility
-has_pkg <- function(pkg) requireNamespace(pkg, quietly = TRUE)
+has_pkg <- function(pkg) {
+  if (is.null(pkg) || length(pkg) == 0 || !is.character(pkg) || is.na(pkg[1]) || !nzchar(pkg[1])) {
+    return(FALSE)
+  }
+  pkg_name <- as.character(pkg[1])
+  if (pkg_name %in% loadedNamespaces()) {
+    return(TRUE)
+  }
+  pkg_paths <- tryCatch(
+    find.package(pkg_name, quiet = TRUE),
+    error = function(e) character(0)
+  )
+  if (length(pkg_paths) > 0 && nzchar(pkg_paths[1])) {
+    return(TRUE)
+  }
+  res <- tryCatch(
+    suppressWarnings(as.logical(requireNamespace(pkg_name, quietly = TRUE))),
+    error = function(e) FALSE
+  )
+  isTRUE(res)
+}
 
 # ------------------------------------------------------------------------------
-# Helpers: Safe Scaling & Evaluation Metrics
+# Helpers: Safe Scaling, Metric Evaluation & Input Validation
 # ------------------------------------------------------------------------------
+get_valid_val <- function(val, default_val, min_val = NULL) {
+  if (is.null(val) || length(val) == 0 || is.na(val[1])) {
+    return(default_val)
+  }
+  num_val <- suppressWarnings(as.numeric(val[1]))
+  if (is.na(num_val)) {
+    return(default_val)
+  }
+  if (!is.null(min_val) && num_val < min_val) {
+    return(default_val)
+  }
+  if (is.integer(default_val)) as.integer(num_val) else num_val
+}
+
+is_webr_env <- function() {
+  exists("webr", envir = .GlobalEnv) ||
+    Sys.getenv("WEBR") == "1" ||
+    grepl("wasm", R.version$platform, ignore.case = TRUE) ||
+    grepl("emscripten", R.version$platform, ignore.case = TRUE)
+}
+
 safe_scale <- function(m) {
   m_mat <- as.matrix(m)
   sds <- apply(m_mat, 2, sd, na.rm = TRUE)
@@ -30,14 +75,20 @@ safe_scale <- function(m) {
 }
 
 calc_ari <- function(true_labels, pred_labels) {
+  if (is.null(true_labels) || is.null(pred_labels) ||
+        length(true_labels) == 0 || length(pred_labels) == 0) {
+    return(0.0)
+  }
   true_v <- as.vector(as.integer(true_labels))
   pred_v <- as.vector(as.integer(pred_labels))
 
-  if (has_pkg("mclust")) {
-    return(mclust::adjustedRandIndex(true_v, pred_v))
-  }
+  valid_idx <- which(!is.na(true_v) & !is.na(pred_v))
+  if (length(valid_idx) < 2) return(1.0)
+  true_v <- true_v[valid_idx]
+  pred_v <- pred_v[valid_idx]
+
   tab <- table(true_v, pred_v)
-  n <- length(true_v)
+  n <- sum(tab)
   if (n < 2) return(1.0)
 
   comb2 <- function(x) x * (x - 1) / 2
@@ -47,51 +98,50 @@ calc_ari <- function(true_labels, pred_labels) {
 
   expected <- (sum_comb_rows * sum_comb_cols) / comb2(n)
   max_val <- 0.5 * (sum_comb_rows + sum_comb_cols)
+  denom <- max_val - expected
 
-  if (max_val == expected) return(1.0)
-  (sum_comb_tab - expected) / (max_val - expected)
+  if (is.na(denom) || length(denom) == 0 || denom == 0) {
+    return(1.0)
+  }
+  res <- (sum_comb_tab - expected) / denom
+  if (is.na(res) || length(res) == 0) 1.0 else as.numeric(res)
 }
 
 calc_misclass_error <- function(true_labels, pred_labels) {
+  if (is.null(true_labels) || is.null(pred_labels) ||
+        length(true_labels) == 0 || length(pred_labels) == 0) {
+    return(0.0)
+  }
   true_v <- as.vector(as.integer(true_labels))
   pred_v <- as.vector(as.integer(pred_labels))
+
+  valid_idx <- which(!is.na(true_v) & !is.na(pred_v))
+  if (length(valid_idx) == 0) return(0.0)
+  true_v <- true_v[valid_idx]
+  pred_v <- pred_v[valid_idx]
 
   tab <- table(true_v, pred_v)
   k_true <- nrow(tab)
   k_pred <- ncol(tab)
-
-  if (k_pred > 6 || k_true > 6) {
-    # Greedy matching heuristic for larger K
-    matched_correct <- 0
-    temp_tab <- tab
-    for (i in 1:min(k_true, k_pred)) {
-      max_idx <- which(temp_tab == max(temp_tab), arr.ind = TRUE)[1, ]
-      matched_correct <- matched_correct + temp_tab[max_idx[1], max_idx[2]]
-      temp_tab[max_idx[1], ] <- -1
-      temp_tab[, max_idx[2]] <- -1
-    }
-    return(1 - (matched_correct / length(true_v)))
+  if (is.null(k_true) || is.null(k_pred) || k_true == 0 || k_pred == 0) {
+    return(0.0)
   }
 
-  # Exact permutation matching for K <= 6
-  perms <- function(v) {
-    if (length(v) <= 1) return(matrix(v, 1, 1))
-    do.call(rbind, lapply(seq_along(v), function(i) {
-      cbind(v[i], perms(v[-i]))
-    }))
+  matched_correct <- 0
+  temp_tab <- as.matrix(tab)
+  n_matches <- min(k_true, k_pred)
+
+  for (i in seq_len(n_matches)) {
+    if (max(temp_tab) < 0) break
+    max_idx <- which(temp_tab == max(temp_tab), arr.ind = TRUE)[1, , drop = FALSE]
+    r <- max_idx[1, 1]
+    c <- max_idx[1, 2]
+    matched_correct <- matched_correct + temp_tab[r, c]
+    temp_tab[r, ] <- -1
+    temp_tab[, c] <- -1
   }
 
-  all_p <- perms(1:k_true)
-  max_correct <- 0
-  for (i in seq_len(nrow(all_p))) {
-    p <- all_p[i, ]
-    cols_to_use <- p[seq_len(min(k_true, k_pred))]
-    cur_correct <- sum(sapply(seq_along(cols_to_use), function(idx) {
-      if (idx <= ncol(tab)) tab[cols_to_use[idx], idx] else 0
-    }))
-    if (cur_correct > max_correct) max_correct <- cur_correct
-  }
-  1 - (max_correct / length(true_v))
+  round(max(0, min(1, 1 - (matched_correct / length(true_v)))), 4)
 }
 
 # ------------------------------------------------------------------------------
@@ -99,7 +149,13 @@ calc_misclass_error <- function(true_labels, pred_labels) {
 # ------------------------------------------------------------------------------
 generate_synthetic_mixed_data <- function(n = 1000, p_con = 10, p_cat = 10, k = 4,
                                           separation = 2.0, num_levels = 10, seed = NULL) {
-  if (!is.null(seed)) set.seed(seed)
+  n <- get_valid_val(n, 1000L, min_val = 10)
+  p_con <- get_valid_val(p_con, 10L, min_val = 1)
+  p_cat <- get_valid_val(p_cat, 10L, min_val = 1)
+  k <- get_valid_val(k, 4L, min_val = 2)
+  separation <- get_valid_val(separation, 2.0, min_val = 0.1)
+  num_levels <- get_valid_val(num_levels, 10L, min_val = 2)
+  if (!is.null(seed) && length(seed) > 0 && !is.na(seed[1])) set.seed(as.integer(seed[1]))
 
   props <- rep(1 / k, k)
   cluster_assign <- sample(seq_len(k), size = n, replace = TRUE, prob = props)
@@ -151,20 +207,14 @@ method_meta <- list(
   flexmix_binary = list(name = "FlexMix (Binary Levels)", pkg = "flexmix")
 )
 
-detected_cores_count <- tryCatch({
-  p_cores <- parallel::detectCores(logical = FALSE)
-  if (is.na(p_cores) || p_cores < 1) {
-    p_cores <- parallel::detectCores()
-  }
-  if (is.na(p_cores) || p_cores < 1) 2 else p_cores
-}, error = function(e) 2)
-
 run_single_fixed_k <- function(m, dat, k) {
   m_info <- method_meta[[m]]
   m_name <- m_info$name
   m_pkg <- m_info$pkg
 
-  if (!has_pkg(m_pkg)) {
+  k <- get_valid_val(k, 4L, min_val = 2)
+
+  if (!isTRUE(has_pkg(m_pkg))) {
     return(data.frame(
       Method = m_name,
       Package = m_pkg,
@@ -177,7 +227,9 @@ run_single_fixed_k <- function(m, dat, k) {
   }
 
   t_start <- proc.time()
+  cur_step <- "init"
   tryCatch({
+    cur_step <- paste0("clustering with ", m_pkg)
     if (m == "kamila") {
       res <- kamila::kamila(
         dat$conVars, dat$catVars, numClust = k, numInit = 5, maxIter = 25, calcNumClust = "none"
@@ -188,11 +240,11 @@ run_single_fixed_k <- function(m, dat, k) {
       pam_fit <- cluster::pam(gdist, k = k, diss = TRUE)
       memb <- as.integer(pam_fit$clustering)
     } else if (m == "kproto") {
-      kp_fit <- clustMixType::kproto(dat$fullData, k = k, nstart = 3, verbose = FALSE)
+      kp_fit <- clustMixType::kproto(dat$fullData, k = k, nstart = 5, verbose = FALSE)
       memb <- as.integer(kp_fit$cluster)
     } else if (m == "varsellcm") {
       v_fit <- VarSelLCM::VarSelCluster(
-        x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+        x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbKeep = 5, nbcores = 1
       )
       memb <- as.integer(VarSelLCM::fitted(v_fit, type = "partition"))
     } else if (m == "flexmix_multinom") {
@@ -203,10 +255,12 @@ run_single_fixed_k <- function(m, dat, k) {
       cat_mods <- lapply(cat_cols, function(col) {
         flexmix::FLXMRmultinom(stats::as.formula(paste0(col, " ~ 1")))
       })
-      f_fit <- flexmix::flexmix(
+      f_fit <- flexmix::stepFlexmix(
         stats::as.formula(paste0(con_cols[1], " ~ 1")),
         data = dat$fullData,
         k = k,
+        nrep = 5,
+        verbose = FALSE,
         model = c(list(con_mod), cat_mods),
         control = list(iter.max = 25, minprior = 0.05, verbose = 0)
       )
@@ -219,10 +273,12 @@ run_single_fixed_k <- function(m, dat, k) {
       bin_cols <- colnames(cat_dummy)
       con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
       bin_form <- stats::as.formula(paste0("cbind(", paste(bin_cols, collapse = ", "), ") ~ 1"))
-      f_fit <- flexmix::flexmix(
+      f_fit <- flexmix::stepFlexmix(
         stats::as.formula(paste0(con_cols[1], " ~ 1")),
         data = df_comb,
         k = k,
+        nrep = 5,
+        verbose = FALSE,
         model = list(
           flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
           flexmix::FLXMCmvbinary(bin_form)
@@ -232,10 +288,16 @@ run_single_fixed_k <- function(m, dat, k) {
       memb <- as.integer(flexmix::clusters(f_fit))
     }
 
+    cur_step <- "timing"
     t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
+
+    cur_step <- "ari calculation"
     ari <- calc_ari(dat$trueID, memb)
+
+    cur_step <- "misclass calculation"
     err <- calc_misclass_error(dat$trueID, memb)
 
+    cur_step <- "result formatting"
     data.frame(
       Method = m_name,
       Package = m_pkg,
@@ -252,39 +314,37 @@ run_single_fixed_k <- function(m, dat, k) {
       Time_ms = NA,
       ARI = NA,
       Error_Rate = NA,
-      Status = paste("Error:", substr(e$message, 1, 28)),
+      Status = sprintf("Error in [%s]: %s", cur_step, conditionMessage(e)),
       stringsAsFactors = FALSE
     )
   })
 }
 
-run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
+run_single_selection <- function(m, dat, true_k) {
   m_info <- method_meta[[m]]
   m_name <- m_info$name
   m_pkg <- m_info$pkg
 
-  if (!has_pkg(m_pkg)) return(NULL)
+  if (!isTRUE(has_pkg(m_pkg))) return(NULL)
 
+  true_k <- get_valid_val(true_k, 4L, min_val = 2)
   k_max_search <- min(10, max(5, true_k + 2))
   k_range <- 2:k_max_search
 
   t_start <- proc.time()
+  cur_step <- "init"
   tryCatch({
+    cur_step <- paste0("model selection with ", m_pkg)
     if (m == "kamila") {
-      kam_args <- list(
+      res_k <- kamila::kamila(
         conVar = dat$conVars,
         catFactor = dat$catVars,
         numClust = k_range,
-        numInit = 3,
+        numInit = 5,
         calcNumClust = "ps",
         numPredStrCvRun = 5,
         predStrThresh = 0.6
       )
-      if ("numCores" %in% names(formals(kamila::kamila))) {
-        num_cores_ps <- if (!is.null(ps_cores) && ps_cores > 1) as.integer(ps_cores) else 1
-        kam_args$numCores <- num_cores_ps
-      }
-      res_k <- do.call(kamila::kamila, kam_args)
       t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
       pred_k <- if (is.list(res_k$nClust)) res_k$nClust$bestNClust else res_k$nClust
       ari <- calc_ari(dat$trueID, res_k$finalMemb)
@@ -322,10 +382,10 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
         method = "silhouette",
         data = dat$fullData,
         k = k_range,
-        nstart = 2,
+        nstart = 5,
         verbose = FALSE
       )
-      fit_kp <- clustMixType::kproto(dat$fullData, k = val$k_opt, nstart = 2, verbose = FALSE)
+      fit_kp <- clustMixType::kproto(dat$fullData, k = val$k_opt, nstart = 5, verbose = FALSE)
       t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
       ari <- calc_ari(dat$trueID, as.integer(fit_kp$cluster))
       data.frame(
@@ -340,7 +400,7 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
       )
     } else if (m == "varsellcm") {
       res_v <- VarSelLCM::VarSelCluster(
-        x = dat$fullData, gvals = k_range, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+        x = dat$fullData, gvals = k_range, vbleSelec = FALSE, crit.varsel = "BIC", nbKeep = 5, nbcores = 1
       )
       t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
       memb_v <- as.integer(VarSelLCM::fitted(res_v, type = "partition"))
@@ -374,7 +434,8 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
         stats::as.formula(paste0(con_cols[1], " ~ 1")),
         data = dat$fullData,
         k = k_range,
-        nrep = 1,
+        nrep = 5,
+        verbose = FALSE,
         model = c(list(con_mod), cat_mods),
         control = list(iter.max = 20, minprior = 0.05, verbose = 0)
       )
@@ -403,7 +464,8 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
         stats::as.formula(paste0(con_cols[1], " ~ 1")),
         data = df_comb,
         k = k_range,
-        nrep = 1,
+        nrep = 5,
+        verbose = FALSE,
         model = list(
           flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
           flexmix::FLXMCmvbinary(bin_form)
@@ -430,7 +492,7 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
       Package = m_pkg,
       True_K = true_k,
       Predicted_K = NA,
-      Criterion = paste("Error:", substr(e$message, 1, 24)),
+      Criterion = sprintf("Error in [%s]: %s", cur_step, conditionMessage(e)),
       ARI = NA,
       Time_ms = NA,
       stringsAsFactors = FALSE
@@ -438,98 +500,18 @@ run_single_selection <- function(m, dat, true_k, ps_cores = 1) {
   })
 }
 
-run_parallel_jobs <- function(method_keys, runner_fn, use_parallel = TRUE, num_cores = 4,
-                              cluster_obj = NULL, progress_fn = NULL, ...) {
-  is_webr <- exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1"
+run_benchmark_jobs <- function(method_keys, runner_fn, progress_fn = NULL, ...) {
   n_methods <- length(method_keys)
-  if (!use_parallel || is_webr || num_cores <= 1 || n_methods <= 1) {
-    t_start <- proc.time()
-    res <- vector("list", n_methods)
-    for (i in seq_along(method_keys)) {
-      m <- method_keys[i]
-      if (is.function(progress_fn)) {
-        progress_fn(i, n_methods, method_meta[[m]]$name)
-      }
-      res[[i]] <- runner_fn(m, ...)
-    }
-    t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-    attr(res, "wall_clock_ms") <- t_elapsed
-    return(res)
-  }
-
-  n_workers <- min(n_methods, as.integer(num_cores))
-  cl <- if (!is.null(cluster_obj)) cluster_obj else tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
-  is_temp_cl <- is.null(cluster_obj) && !is.null(cl)
-
-  if (is.null(cl)) {
-    t_start <- proc.time()
-    res <- vector("list", n_methods)
-    for (i in seq_along(method_keys)) {
-      m <- method_keys[i]
-      if (is.function(progress_fn)) {
-        progress_fn(i, n_methods, method_meta[[m]]$name)
-      }
-      res[[i]] <- runner_fn(m, ...)
-    }
-    t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-    attr(res, "wall_clock_ms") <- t_elapsed
-    return(res)
-  }
-
-  if (is_temp_cl) {
-    on.exit(try(parallel::stopCluster(cl), silent = TRUE), add = TRUE)
-  }
-
-  args_list <- list(...)
-  worker_exec <- function(m, args) {
-    res <- do.call(runner_fn, c(list(m = m), args))
-    list(m = m, result = res)
-  }
-
-  parallel::clusterExport(
-    cl,
-    varlist = c(
-      "has_pkg", "safe_scale", "calc_ari", "calc_misclass_error",
-      "method_meta", "runner_fn", "args_list", "worker_exec"
-    ),
-    envir = environment()
-  )
-
   t_start <- proc.time()
-  submitted <- min(n_workers, n_methods)
-  for (i in seq_len(submitted)) {
-    parallel:::sendCall(
-      cl[[i]],
-      worker_exec,
-      list(m = method_keys[i], args = args_list)
-    )
-  }
-
-  res_map <- vector("list", n_methods)
-  names(res_map) <- method_keys
-
-  for (i in seq_len(n_methods)) {
-    worker_res <- parallel:::recvOneResult(cl)
-    m_done <- worker_res$value$m
-    res_map[[m_done]] <- worker_res$value$result
-
+  res <- vector("list", n_methods)
+  for (i in seq_along(method_keys)) {
+    m <- method_keys[i]
     if (is.function(progress_fn)) {
-      m_name <- if (m_done %in% names(method_meta)) method_meta[[m_done]]$name else m_done
-      progress_fn(i, n_methods, sprintf("Completed %s", m_name))
+      progress_fn(i, n_methods, method_meta[[m]]$name)
     }
-
-    if (submitted < n_methods) {
-      submitted <- submitted + 1
-      parallel:::sendCall(
-        cl[[worker_res$node]],
-        worker_exec,
-        list(m = method_keys[submitted], args = args_list)
-      )
-    }
+    res[[i]] <- runner_fn(m, ...)
   }
-
   t_elapsed <- (proc.time() - t_start)[["elapsed"]] * 1000
-  res <- unname(res_map[method_keys])
   attr(res, "wall_clock_ms") <- t_elapsed
   res
 }
@@ -553,12 +535,23 @@ ui <- fluidPage(
         font-weight: 500 !important;
         z-index: 9999;
       }
+      .shiny-notification-close {
+        display: none !important;
+      }
     "))
   ),
 
   titlePanel(
     tags$div(
-      tags$h2("Mixed-Type Clustering Horse-Race", style = "margin-bottom: 2px; font-weight: 700;"),
+      tags$div(
+        style = "display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;",
+        tags$h2("Mixed-Type Clustering Horse-Race", style = "margin-bottom: 2px; font-weight: 700;"),
+        tags$span(
+          class = "badge bg-primary",
+          style = "font-size: 0.85rem; padding: 6px 10px;",
+          "Build: 2026-09-10 (v0.1.3-diag-sequential)"
+        )
+      ),
       tags$p(
         "Interactive benchmark comparing mixed-data clustering techniques.",
         style = "color: #6c757d; font-size: 1.05rem;"
@@ -627,25 +620,8 @@ ui <- fluidPage(
           "flexmix_multinom", "flexmix_binary"
         )
       ),
-
       tags$hr(),
-      tags$h4("Compute & Parallelism", style = "font-weight: 600;"),
-      checkboxInput(
-        "use_parallel",
-        "Enable Multi-Core Parallel Execution",
-        value = TRUE
-      ),
-      conditionalPanel(
-        condition = "input.use_parallel",
-        sliderInput(
-          "num_cores",
-          "Worker Cores:",
-          min = 1,
-          max = detected_cores_count,
-          value = min(4, detected_cores_count),
-          step = 1
-        )
-      )
+      uiOutput("diag_sidebar_box")
     ),
 
     mainPanel(
@@ -656,6 +632,7 @@ ui <- fluidPage(
         tabPanel(
           "Fixed-K Benchmark",
           tags$br(),
+          uiOutput("diag_data_box"),
           tags$div(
             class = "alert alert-info",
             "Evaluate ARI (Adjusted Rand Index), misclassification error, and runtime for a fixed number of clusters."
@@ -782,6 +759,8 @@ ui <- fluidPage(
           tags$br(),
           tags$h4("Runtime Environment & Specs", style = "font-weight: 600;"),
           tableOutput("env_info_table"),
+          tags$h4("System & Dataset Diagnostics", style = "font-weight: 600; margin-top: 20px;"),
+          tableOutput("diag_env_table"),
           tags$h4("Package Versions & Availability", style = "font-weight: 600; margin-top: 20px;"),
           tableOutput("pkg_version_table")
         )
@@ -795,48 +774,8 @@ ui <- fluidPage(
 # ------------------------------------------------------------------------------
 server <- function(input, output, session) {
 
-  # Session-Level Worker Cluster Lifecycle Management
-  session_cluster <- reactiveVal(NULL)
-  current_cluster_size <- reactiveVal(0L)
   fixed_wall_time <- reactiveVal(NULL)
   selection_wall_time <- reactiveVal(NULL)
-
-  get_or_create_cluster <- function(n_workers) {
-    cl <- session_cluster()
-    cur_size <- current_cluster_size()
-    if (!is.null(cl) && cur_size == n_workers) {
-      return(cl)
-    }
-    if (!is.null(cl)) {
-      try(parallel::stopCluster(cl), silent = TRUE)
-      session_cluster(NULL)
-      current_cluster_size(0L)
-    }
-    new_cl <- tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
-    if (is.null(new_cl)) return(NULL)
-
-    parallel::clusterEvalQ(new_cl, {
-      suppressPackageStartupMessages({
-        library(kamila)
-        library(cluster)
-        if (requireNamespace("clustMixType", quietly = TRUE)) library(clustMixType)
-        if (requireNamespace("VarSelLCM", quietly = TRUE)) library(VarSelLCM)
-        if (requireNamespace("flexmix", quietly = TRUE)) library(flexmix)
-        if (requireNamespace("mvtnorm", quietly = TRUE)) library(mvtnorm)
-        if (requireNamespace("mclust", quietly = TRUE)) library(mclust)
-      })
-    })
-    session_cluster(new_cl)
-    current_cluster_size(n_workers)
-    new_cl
-  }
-
-  session$onSessionEnded(function() {
-    cl <- session_cluster()
-    if (!is.null(cl)) {
-      try(parallel::stopCluster(cl), silent = TRUE)
-    }
-  })
 
   output$n_obs_badge <- renderUI({
     val <- if (is.null(input$log_n) || !is.numeric(input$log_n)) 3.0 else input$log_n
@@ -859,15 +798,22 @@ server <- function(input, output, session) {
     input$btn_run_fixed
     input$btn_run_select
     isolate({
-      n_calc <- if (!is.null(input$log_n)) as.integer(round(10^input$log_n)) else 1000L
+      n_calc <- as.integer(round(10^get_valid_val(input$log_n, 3.0, min_val = 3.0)))
+      p_con_val <- get_valid_val(input$p_con, 10L, min_val = 1)
+      p_cat_val <- get_valid_val(input$p_cat, 10L, min_val = 1)
+      k_val <- get_valid_val(input$k_clusters, 4L, min_val = 2)
+      sep_val <- get_valid_val(input$separation, 2.0, min_val = 0.1)
+      levels_val <- get_valid_val(input$num_levels, 10L, min_val = 2)
+      seed_val <- get_valid_val(input$rand_seed, 42L, min_val = 1)
+
       generate_synthetic_mixed_data(
         n = n_calc,
-        p_con = input$p_con,
-        p_cat = input$p_cat,
-        k = input$k_clusters,
-        separation = input$separation,
-        num_levels = input$num_levels,
-        seed = input$rand_seed
+        p_con = p_con_val,
+        p_cat = p_cat_val,
+        k = k_val,
+        separation = sep_val,
+        num_levels = levels_val,
+        seed = seed_val
       )
     })
   })
@@ -877,33 +823,20 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------------
   benchmark_results <- eventReactive(list(input$btn_run_fixed, input$rand_seed), {
     dat <- sim_data()
-    selected_methods <- input$methods
-    k <- isolate(input$k_clusters)
-    use_par <- isTRUE(input$use_parallel)
-    n_cores <- if (!is.null(input$num_cores)) as.integer(input$num_cores) else 1
+    selected_methods <- if (!is.null(input$methods) && length(input$methods) > 0) {
+      input$methods
+    } else {
+      names(method_meta)
+    }
+    k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
 
     valid_methods <- intersect(names(method_meta), selected_methods)
     if (length(valid_methods) == 0) {
       return(data.frame(Message = "No techniques selected"))
     }
 
-    msg <- if (use_par && n_cores > 1) {
-      sprintf(
-        "Running Fixed-K Benchmark (Parallel across %d cores)...",
-        min(n_cores, length(valid_methods))
-      )
-    } else {
-      "Running Fixed-K Benchmark (Sequential)..."
-    }
-
-    worker_cl <- if (use_par && n_cores > 1) {
-      get_or_create_cluster(min(n_cores, length(valid_methods)))
-    } else {
-      NULL
-    }
-
     results_list <- withProgress(
-      message = msg,
+      message = "Running Fixed-K Benchmark...",
       detail = "Initializing benchmark...",
       value = 0.05,
       {
@@ -913,12 +846,9 @@ server <- function(input, output, session) {
             detail = sprintf("[%d/%d] %s", cur_idx, total_count, item_desc)
           )
         }
-        run_parallel_jobs(
+        run_benchmark_jobs(
           method_keys = valid_methods,
           runner_fn = run_single_fixed_k,
-          use_parallel = use_par,
-          num_cores = n_cores,
-          cluster_obj = worker_cl,
           progress_fn = progress_cb,
           dat = dat,
           k = k
@@ -935,33 +865,20 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------------
   selection_results <- eventReactive(input$btn_run_select, {
     dat <- sim_data()
-    selected_methods <- input$methods
-    true_k <- isolate(input$k_clusters)
-    use_par <- isTRUE(input$use_parallel)
-    n_cores <- if (!is.null(input$num_cores)) as.integer(input$num_cores) else 1
+    selected_methods <- if (!is.null(input$methods) && length(input$methods) > 0) {
+      input$methods
+    } else {
+      names(method_meta)
+    }
+    true_k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
 
     valid_methods <- intersect(names(method_meta), selected_methods)
     if (length(valid_methods) == 0) {
       return(data.frame(Message = "No techniques selected"))
     }
 
-    msg <- if (use_par && n_cores > 1) {
-      sprintf(
-        "Running Cluster Selection (Parallel across %d cores)...",
-        min(n_cores, length(valid_methods))
-      )
-    } else {
-      "Running Cluster Selection (Sequential)..."
-    }
-
-    worker_cl <- if (use_par && n_cores > 1) {
-      get_or_create_cluster(min(n_cores, length(valid_methods)))
-    } else {
-      NULL
-    }
-
     results_list <- withProgress(
-      message = msg,
+      message = "Running Cluster Selection (K in 2:10)...",
       detail = "Evaluating candidate cluster counts...",
       value = 0.05,
       {
@@ -971,17 +888,12 @@ server <- function(input, output, session) {
             detail = sprintf("[%d/%d] %s", cur_idx, total_count, item_desc)
           )
         }
-        ps_cores_arg <- if (use_par && length(valid_methods) == 1) n_cores else 1
-        run_parallel_jobs(
+        run_benchmark_jobs(
           method_keys = valid_methods,
           runner_fn = run_single_selection,
-          use_parallel = use_par,
-          num_cores = n_cores,
-          cluster_obj = worker_cl,
           progress_fn = progress_cb,
           dat = dat,
-          true_k = true_k,
-          ps_cores = ps_cores_arg
+          true_k = true_k
         )
       }
     )
@@ -999,18 +911,22 @@ server <- function(input, output, session) {
   # ----------------------------------------------------------------------------
   cluster_assignments <- reactive({
     dat <- sim_data()
-    k <- isolate(input$k_clusters)
-    selected_methods <- input$methods
+    k <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
+    selected_methods <- if (!is.null(input$methods) && length(input$methods) > 0) {
+      input$methods
+    } else {
+      names(method_meta)
+    }
     membs <- list(true = dat$trueID)
 
     # KAMILA
-    if ("kamila" %in% selected_methods && has_pkg("kamila")) {
+    if ("kamila" %in% selected_methods && isTRUE(has_pkg("kamila"))) {
       kam_res <- tryCatch({
         as.integer(kamila::kamila(
           dat$conVars,
           dat$catVars,
           numClust = k,
-          numInit = 3,
+          numInit = 5,
           calcNumClust = "none"
         )$finalMemb)
       }, error = function(e) NULL)
@@ -1018,7 +934,7 @@ server <- function(input, output, session) {
     }
 
     # Gower + PAM
-    if ("gower_pam" %in% selected_methods && has_pkg("cluster")) {
+    if ("gower_pam" %in% selected_methods && isTRUE(has_pkg("cluster"))) {
       pam_res <- tryCatch({
         g_dist <- cluster::daisy(dat$fullData, metric = "gower")
         as.integer(cluster::pam(g_dist, k = k, diss = TRUE)$clustering)
@@ -1027,18 +943,18 @@ server <- function(input, output, session) {
     }
 
     # K-Prototypes
-    if ("kproto" %in% selected_methods && has_pkg("clustMixType")) {
+    if ("kproto" %in% selected_methods && isTRUE(has_pkg("clustMixType"))) {
       kp_res <- tryCatch({
-        as.integer(clustMixType::kproto(dat$fullData, k = k, nstart = 2, verbose = FALSE)$cluster)
+        as.integer(clustMixType::kproto(dat$fullData, k = k, nstart = 5, verbose = FALSE)$cluster)
       }, error = function(e) NULL)
       if (!is.null(kp_res)) membs$kproto <- kp_res
     }
 
     # VarSelLCM
-    if ("varsellcm" %in% selected_methods && has_pkg("VarSelLCM")) {
+    if ("varsellcm" %in% selected_methods && isTRUE(has_pkg("VarSelLCM"))) {
       v_res <- tryCatch({
         v_fit <- VarSelLCM::VarSelCluster(
-          x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbcores = 1
+          x = dat$fullData, gvals = k, vbleSelec = FALSE, crit.varsel = "BIC", nbKeep = 5, nbcores = 1
         )
         as.integer(VarSelLCM::fitted(v_fit, type = "partition"))
       }, error = function(e) NULL)
@@ -1046,7 +962,7 @@ server <- function(input, output, session) {
     }
 
     # FlexMix Multinomial
-    if ("flexmix_multinom" %in% selected_methods && has_pkg("flexmix")) {
+    if ("flexmix_multinom" %in% selected_methods && isTRUE(has_pkg("flexmix"))) {
       f_res <- tryCatch({
         con_cols <- colnames(dat$conVars)
         cat_cols <- colnames(dat$catVars)
@@ -1055,10 +971,12 @@ server <- function(input, output, session) {
         cat_mods <- lapply(cat_cols, function(col) {
           flexmix::FLXMRmultinom(stats::as.formula(paste0(col, " ~ 1")))
         })
-        m <- flexmix::flexmix(
+        m <- flexmix::stepFlexmix(
           stats::as.formula(paste0(con_cols[1], " ~ 1")),
           data = dat$fullData,
           k = k,
+          nrep = 5,
+          verbose = FALSE,
           model = c(list(con_mod), cat_mods),
           control = list(iter.max = 20, minprior = 0.05, verbose = 0)
         )
@@ -1068,7 +986,7 @@ server <- function(input, output, session) {
     }
 
     # FlexMix Binary Levels
-    if ("flexmix_binary" %in% selected_methods && has_pkg("flexmix")) {
+    if ("flexmix_binary" %in% selected_methods && isTRUE(has_pkg("flexmix"))) {
       fb_res <- tryCatch({
         con_mat <- safe_scale(dat$conVars)
         cat_dummy <- stats::model.matrix(~ . - 1, data = dat$catVars)
@@ -1077,10 +995,12 @@ server <- function(input, output, session) {
         bin_cols <- colnames(cat_dummy)
         con_form <- stats::as.formula(paste0("cbind(", paste(con_cols, collapse = ", "), ") ~ 1"))
         bin_form <- stats::as.formula(paste0("cbind(", paste(bin_cols, collapse = ", "), ") ~ 1"))
-        m <- flexmix::flexmix(
+        m <- flexmix::stepFlexmix(
           stats::as.formula(paste0(con_cols[1], " ~ 1")),
           data = df_comb,
           k = k,
+          nrep = 5,
+          verbose = FALSE,
           model = list(
             flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),
             flexmix::FLXMCmvbinary(bin_form)
@@ -1110,25 +1030,9 @@ server <- function(input, output, session) {
     wall_ms <- fixed_wall_time()
     res <- benchmark_results()
     if (is.null(wall_ms) || is.null(res) || !"Time_ms" %in% names(res)) return(NULL)
-    active_methods <- method_name_map[input$methods]
-    valid_res <- res[!is.na(res$Time_ms) & res$Method %in% active_methods, , drop = FALSE]
-    if (nrow(valid_res) == 0) return(NULL)
-    seq_sum <- sum(valid_res$Time_ms, na.rm = TRUE)
-    speedup <- if (wall_ms > 0) round(seq_sum / wall_ms, 2) else 1.0
     tags$div(
       style = "margin-bottom: 12px; font-size: 0.95rem; color: #495057;",
-      tags$span(tags$strong("Total Wall-Clock Time: "), sprintf("%.1f ms", wall_ms)),
-      tags$span(" | "),
-      tags$span(tags$strong("Sequential Sum of Runtimes: "), sprintf("%.1f ms", seq_sum)),
-      if (speedup > 1.05) {
-        tags$span(
-          class = "badge bg-success",
-          style = "margin-left: 8px; font-size: 0.85rem; padding: 4px 8px;",
-          sprintf("%.2fx Parallel Speedup", speedup)
-        )
-      } else {
-        NULL
-      }
+      tags$span(tags$strong("Total Execution Time: "), sprintf("%.1f ms", wall_ms))
     )
   })
 
@@ -1182,25 +1086,9 @@ server <- function(input, output, session) {
     wall_ms <- selection_wall_time()
     res <- selection_results()
     if (is.null(wall_ms) || is.null(res) || !"Time_ms" %in% names(res)) return(NULL)
-    active_methods <- method_name_map[input$methods]
-    valid_res <- res[!is.na(res$Time_ms) & res$Method %in% active_methods, , drop = FALSE]
-    if (nrow(valid_res) == 0) return(NULL)
-    seq_sum <- sum(valid_res$Time_ms, na.rm = TRUE)
-    speedup <- if (wall_ms > 0) round(seq_sum / wall_ms, 2) else 1.0
     tags$div(
       style = "margin-bottom: 12px; font-size: 0.95rem; color: #495057;",
-      tags$span(tags$strong("Total Wall-Clock Time: "), sprintf("%.1f ms", wall_ms)),
-      tags$span(" | "),
-      tags$span(tags$strong("Sequential Sum of Runtimes: "), sprintf("%.1f ms", seq_sum)),
-      if (speedup > 1.05) {
-        tags$span(
-          class = "badge bg-success",
-          style = "margin-left: 8px; font-size: 0.85rem; padding: 4px 8px;",
-          sprintf("%.2fx Parallel Speedup", speedup)
-        )
-      } else {
-        NULL
-      }
+      tags$span(tags$strong("Total Execution Time: "), sprintf("%.1f ms", wall_ms))
     )
   })
 
@@ -1222,6 +1110,8 @@ server <- function(input, output, session) {
     valid_res <- res[!is.na(res$Predicted_K) & res$Method %in% active_methods, , drop = FALSE]
     if (nrow(valid_res) == 0) return(NULL)
 
+    k_true <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
+
     par(mar = c(10.5, 4.5, 3, 1))
     barplot(
       valid_res$Predicted_K,
@@ -1233,8 +1123,8 @@ server <- function(input, output, session) {
       las = 2,
       cex.names = 0.85
     )
-    abline(h = isolate(input$k_clusters), col = "red", lty = 2, lwd = 2)
-    legend("topright", legend = paste("True K =", isolate(input$k_clusters)), col = "red", lty = 2, lwd = 2)
+    abline(h = k_true, col = "red", lty = 2, lwd = 2)
+    legend("topright", legend = paste("True K =", k_true), col = "red", lty = 2, lwd = 2)
   })
 
   # ----------------------------------------------------------------------------
@@ -1243,7 +1133,7 @@ server <- function(input, output, session) {
   output$lda_cluster_plot <- renderPlot({
     dat <- sim_data()
     all_membs <- cluster_assignments()
-    k_true <- isolate(input$k_clusters)
+    k_true <- get_valid_val(isolate(input$k_clusters), 4L, min_val = 2)
     n_total <- nrow(dat$fullData)
 
     # Subsample 1,000 points (common across all panels and views)
@@ -1399,7 +1289,7 @@ server <- function(input, output, session) {
           "fit <- clustMixType::kproto(\n",
           "  x = dat$fullData,\n",
           "  k = %d,\n",
-          "  nstart = 3,\n",
+          "  nstart = 5,\n",
           "  verbose = FALSE\n",
           ")\n",
           "clusters <- fit$cluster\n"
@@ -1416,6 +1306,7 @@ server <- function(input, output, session) {
           "  gvals = %d,\n",
           "  vbleSelec = FALSE,\n",
           "  crit.varsel = \"BIC\",\n",
+          "  nbKeep = 5,\n",
           "  nbcores = 1\n",
           ")\n",
           "clusters <- VarSelLCM::fitted(fit, type = \"partition\")\n"
@@ -1434,10 +1325,11 @@ server <- function(input, output, session) {
           "cat_mods <- lapply(cat_cols, function(col) {\n",
           "  flexmix::FLXMRmultinom(as.formula(paste0(col, \" ~ 1\")))\n",
           "})\n",
-          "fit <- flexmix::flexmix(\n",
+          "fit <- flexmix::stepFlexmix(\n",
           "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
           "  data = dat$fullData,\n",
           "  k = %d,\n",
+          "  nrep = 5,\n",
           "  model = c(list(con_mod), cat_mods),\n",
           "  control = list(iter.max = 25, minprior = 0.05, verbose = 0)\n",
           ")\n",
@@ -1457,10 +1349,11 @@ server <- function(input, output, session) {
           "bin_cols <- colnames(cat_dummy)\n",
           "con_form <- as.formula(paste0(\"cbind(\", paste(con_cols, collapse = \", \"), \") ~ 1\"))\n",
           "bin_form <- as.formula(paste0(\"cbind(\", paste(bin_cols, collapse = \", \"), \") ~ 1\"))\n",
-          "fit <- flexmix::flexmix(\n",
+          "fit <- flexmix::stepFlexmix(\n",
           "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
           "  data = df_comb,\n",
           "  k = %d,\n",
+          "  nrep = 5,\n",
           "  model = list(\n",
           "    flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),\n",
           "    flexmix::FLXMCmvbinary(bin_form)\n",
@@ -1481,11 +1374,6 @@ server <- function(input, output, session) {
     k_range_str <- sprintf("2:%d", k_max)
 
     if (is.null(m) || m == "kamila") {
-      cores_snippet <- if (isTRUE(input$use_parallel) && !is.null(input$num_cores) && input$num_cores > 1) {
-        sprintf(",\n  numCores = %d", as.integer(input$num_cores))
-      } else {
-        ""
-      }
       sprintf(
         paste0(
           "# --- KAMILA Cluster Count Selection (Prediction Strength) ---\n",
@@ -1494,15 +1382,14 @@ server <- function(input, output, session) {
           "  conVar = dat$conVars,\n",
           "  catFactor = dat$catVars,\n",
           "  numClust = %s,\n",
-          "  numInit = 3,\n",
+          "  numInit = 5,\n",
           "  calcNumClust = \"ps\",\n",
           "  numPredStrCvRun = 5,\n",
-          "  predStrThresh = 0.6%s\n",
+          "  predStrThresh = 0.6\n",
           ")\n",
           "best_k <- fit$nClust$bestNClust\n"
         ),
-        k_range_str,
-        cores_snippet
+        k_range_str
       )
     } else if (m == "gower_pam") {
       sprintf(
@@ -1527,7 +1414,7 @@ server <- function(input, output, session) {
           "  method = \"silhouette\",\n",
           "  data = dat$fullData,\n",
           "  k = %s,\n",
-          "  nstart = 2,\n",
+          "  nstart = 5,\n",
           "  verbose = FALSE\n",
           ")\n",
           "best_k <- val$k_opt\n"
@@ -1544,6 +1431,7 @@ server <- function(input, output, session) {
           "  gvals = %s,\n",
           "  vbleSelec = FALSE,\n",
           "  crit.varsel = \"BIC\",\n",
+          "  nbKeep = 5,\n",
           "  nbcores = 1\n",
           ")\n",
           "best_k <- fit@model@g\n"
@@ -1566,7 +1454,7 @@ server <- function(input, output, session) {
           "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
           "  data = dat$fullData,\n",
           "  k = %s,\n",
-          "  nrep = 1,\n",
+          "  nrep = 5,\n",
           "  model = c(list(con_mod), cat_mods),\n",
           "  control = list(iter.max = 20, minprior = 0.05, verbose = 0)\n",
           ")\n",
@@ -1591,7 +1479,7 @@ server <- function(input, output, session) {
           "  as.formula(paste0(con_cols[1], \" ~ 1\")),\n",
           "  data = df_comb,\n",
           "  k = %s,\n",
-          "  nrep = 1,\n",
+          "  nrep = 5,\n",
           "  model = list(\n",
           "    flexmix::FLXMCmvnorm(con_form, diagonal = TRUE),\n",
           "    flexmix::FLXMCmvbinary(bin_form)\n",
@@ -1635,6 +1523,59 @@ server <- function(input, output, session) {
     )
   })
 
+  # ----------------------------------------------------------------------------
+  # Diagnostics & Runtime Telemetry
+  # ----------------------------------------------------------------------------
+  output$diag_sidebar_box <- renderUI({
+    dat <- sim_data()
+    n_rows <- if (!is.null(dat$fullData)) nrow(dat$fullData) else 0L
+    p_con <- if (!is.null(dat$conVars)) ncol(dat$conVars) else 0L
+    p_cat <- if (!is.null(dat$catVars)) ncol(dat$catVars) else 0L
+    k_cnt <- if (!is.null(dat$trueID)) length(unique(dat$trueID)) else 0L
+
+    is_ok <- n_rows > 0 && p_con > 0 && p_cat > 0 && k_cnt > 0
+    bg_style <- if (is_ok) {
+      "background: #f8f9fa; border: 1px solid #ced4da;"
+    } else {
+      "background: #f8d7da; border: 1px solid #f5c6cb;"
+    }
+
+    tags$div(
+      style = paste0("padding: 8px 10px; border-radius: 6px; font-size: 0.82rem; ", bg_style),
+      tags$div(tags$strong("Data Generator Status:")),
+      tags$div(sprintf("Obs (N): %s | Features: %d Con / %d Cat", format(n_rows, big.mark = ","), p_con, p_cat)),
+      tags$div(sprintf("True Clusters: %d | Status: %s", k_cnt, if (is_ok) "Ready" else "UNINITIALIZED"))
+    )
+  })
+
+  output$diag_data_box <- renderUI({
+    dat <- sim_data()
+    n_rows <- if (!is.null(dat$fullData)) nrow(dat$fullData) else 0L
+    p_con <- if (!is.null(dat$conVars)) ncol(dat$conVars) else 0L
+    p_cat <- if (!is.null(dat$catVars)) ncol(dat$catVars) else 0L
+    k_cnt <- if (!is.null(dat$trueID)) length(unique(dat$trueID)) else 0L
+
+    is_ok <- n_rows > 0 && p_con > 0 && p_cat > 0 && k_cnt > 0
+    if (!is_ok) {
+      tags$div(
+        class = "alert alert-danger",
+        tags$strong("Diagnostic Warning: "),
+        "The generated dataset is currently empty or uninitialized (N = 0). ",
+        "Please check the simulation settings."
+      )
+    } else {
+      tags$div(
+        class = "alert alert-light border",
+        style = "padding: 8px 12px; margin-bottom: 12px; font-size: 0.88rem; color: #495057;",
+        tags$strong("Live Data State: "),
+        sprintf(
+          "N = %s observations, %d continuous + %d categorical variables, True K = %d clusters.",
+          format(n_rows, big.mark = ","), p_con, p_cat, k_cnt
+        )
+      )
+    }
+  })
+
   # Environment Information
   output$env_info_table <- renderTable({
     is_webr <- exists("webr", envir = .GlobalEnv) || Sys.getenv("WEBR") == "1"
@@ -1642,14 +1583,12 @@ server <- function(input, output, session) {
       Property = c(
         "R Version",
         "Platform / Architecture",
-        "Client Hardware Cores",
         "Execution Engine",
         "Hosting Architecture"
       ),
       Value = c(
         R.version.string,
         R.version$platform,
-        as.character(parallel::detectCores(logical = FALSE)),
         if (is_webr) "WebR / WebAssembly (Client-Side in Browser)" else "Native R Runtime",
         if (is_webr) "Shinylive (Zero Server / Static GitHub Pages)" else "Standard Shiny Session"
       ),
@@ -1657,17 +1596,70 @@ server <- function(input, output, session) {
     )
   }, striped = TRUE, bordered = TRUE)
 
-  # Package Versions
-  output$pkg_version_table <- renderTable({
-    pkgs <- c("kamila", "cluster", "clustMixType", "VarSelLCM", "flexmix", "mixtools", "mclust", "shiny")
-    versions <- sapply(pkgs, function(p) {
-      if (has_pkg(p)) as.character(packageVersion(p)) else "Not Installed (Optional)"
-    })
+  # Live System & Dataset Diagnostics
+  output$diag_env_table <- renderTable({
+    dat <- sim_data()
+    n_rows <- if (!is.null(dat$fullData)) nrow(dat$fullData) else 0L
+    p_con <- if (!is.null(dat$conVars)) ncol(dat$conVars) else 0L
+    p_cat <- if (!is.null(dat$catVars)) ncol(dat$catVars) else 0L
+    k_cnt <- if (!is.null(dat$trueID)) length(unique(dat$trueID)) else 0L
+
     data.frame(
-      Package = pkgs,
-      Version = versions,
+      Telemetry_Item = c(
+        "WebAssembly / WebR Environment",
+        "Dataset Row Count (N)",
+        "Continuous Variables Count",
+        "Categorical Variables Count",
+        "Ground Truth Clusters Count",
+        "Data Frame Memory Size",
+        "Diagnostic Timestamp (UTC)"
+      ),
+      Value = c(
+        as.character(is_webr_env()),
+        as.character(n_rows),
+        as.character(p_con),
+        as.character(p_cat),
+        as.character(k_cnt),
+        if (!is.null(dat$fullData)) format(object.size(dat$fullData), units = "auto") else "0 B",
+        format(Sys.time(), "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+      ),
       stringsAsFactors = FALSE
     )
+  }, striped = TRUE, bordered = TRUE)
+
+  # Package Versions
+  output$pkg_version_table <- renderTable({
+    tryCatch({
+      pkgs <- c("kamila", "cluster", "clustMixType", "VarSelLCM", "flexmix", "mixtools", "mclust", "shiny")
+      v_list <- character(length(pkgs))
+      for (i in seq_along(pkgs)) {
+        p <- pkgs[i]
+        ok <- isTRUE(has_pkg(p))
+        if (isTRUE(ok)) {
+          ver_str <- "Installed"
+          tryCatch({
+            v_val <- as.character(utils::packageVersion(p))
+            if (length(v_val) == 1 && !is.na(v_val) && nzchar(v_val)) {
+              ver_str <- v_val
+            }
+          }, error = function(e) NULL)
+          v_list[i] <- ver_str
+        } else {
+          v_list[i] <- "Not Installed (Optional)"
+        }
+      }
+      data.frame(
+        Package = pkgs,
+        Version = v_list,
+        stringsAsFactors = FALSE
+      )
+    }, error = function(e) {
+      data.frame(
+        Package = "Status",
+        Version = paste0("Error: ", conditionMessage(e)),
+        stringsAsFactors = FALSE
+      )
+    })
   }, striped = TRUE, bordered = TRUE)
 }
 
