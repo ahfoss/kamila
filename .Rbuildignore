@@ -14,3 +14,4 @@
 ^CHANGELOG\.md$
 ^kamila.*\.tar\.gz$
 ^kamila\.Rcheck$
+^cran-comments\.md$
