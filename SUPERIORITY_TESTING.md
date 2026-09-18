@@ -34,7 +34,7 @@ H_0 &: \text{Location}_{\text{cand}} \ge (1 - \delta) \cdot \text{Location}_{\te
 H_1 &: \text{Location}_{\text{cand}} < (1 - \delta) \cdot \text{Location}_{\text{base}} \quad \text{(Superior by at least } \delta\text{)}
 \end{aligned}$$
 
-- **Decision Rule**: Reject $H_0$ if $p < \alpha$ (default $\alpha = 0.05$).
+- **Decision Rule**: Reject $H_0$ if $p < \alpha$ (default $\alpha = 0.01$).
 - When $H_0$ is rejected, the result is marked **`SUPERIOR (PASS)`**.
 - If $H_0$ cannot be rejected, the result is marked **`NOT SUPERIOR (FAIL)`**.
 - Per project policy, raw unadjusted $p$-values are evaluated across conditions without multiple testing corrections.
@@ -43,15 +43,15 @@ H_1 &: \text{Location}_{\text{cand}} < (1 - \delta) \cdot \text{Location}_{\text
 
 ## 3. Dataset Conditions
 
-Certain optimizations (such as C++ memory layout, vectorization, or algorithmic complexity improvements) only manifest at larger scales, while others may add initialization overhead that hurts small datasets. The benchmark evaluates three distinct scales:
+Certain optimizations (such as C++ memory layout, vectorization, or algorithmic complexity improvements) only manifest at larger scales, while others may add initialization overhead that hurts small datasets. The benchmark evaluates three distinct scales using datasets with **10 continuous** and **10 categorical** variables:
 
 | Tier | Sample Size ($N$) | Features ($P_{\text{con}}, P_{\text{cat}}$) | Replications | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
-| **Small** | $500$ | $4\text{ continuous}, 4\text{ categorical}$ | **30 runs** | Verifies low overhead and consistency on small datasets. |
-| **Medium** | $50,000$ | $4\text{ continuous}, 4\text{ categorical}$ | **30 runs** | Evaluates typical multi-thousand observation clustering workloads. |
-| **Large** | $500,000$ | $4\text{ continuous}, 4\text{ categorical}$ | **15 runs** | Stress-tests scaling, memory bandwidth, and C++ inner loops. |
+| **Small** | $5,000$ | $10\text{ continuous}, 10\text{ categorical}$ | **30 runs** | Verifies low overhead and consistency on small datasets. |
+| **Medium** | $500,000$ | $10\text{ continuous}, 10\text{ categorical}$ | **30 runs** | Evaluates large mixed-data clustering workloads. |
+| **Large** | $3,000,000$ | $10\text{ continuous}, 10\text{ categorical}$ | **15 runs** | Stress-tests scaling, memory bandwidth, and C++ inner loops on multi-million row datasets. |
 
-Total execution time across all 3 tiers is $\approx 4$ minutes, providing rapid feedback in CI and local development.
+Total execution time across all 3 tiers is $\approx 3$ minutes, providing rapid feedback in CI and local development.
 
 ---
 
@@ -99,7 +99,7 @@ Rscript inst/benchmarks/run_superiority_benchmark.R --baseline-file baseline_mas
 | Option | Default | Description |
 | :--- | :--- | :--- |
 | `--delta <num>` | `0.01` | Required superiority margin $\delta$ ($0.01 = 1\%$). |
-| `--alpha <num>` | `0.05` | Significance level for hypothesis testing. |
+| `--alpha <num>` | `0.01` | Significance level for hypothesis testing. |
 | `--require-all <bool>` | `TRUE` | Require all executed tiers to achieve superiority to pass. |
 | `--tiers <list>` | `small,medium,large` | Comma-separated list of tiers to run (e.g., `--tiers large`). |
 | `--quick` | `FALSE` | Runs a small smoke test (5 small, 5 medium, 3 large runs) for quick verification. |

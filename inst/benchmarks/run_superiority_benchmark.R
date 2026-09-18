@@ -12,9 +12,9 @@
 #   H1: Location(Candidate) <  (1 - delta) * Location(Baseline)
 #
 # Dataset Conditions:
-#   - Small:  N =     500, 30 runs
-#   - Medium: N =  50,000, 30 runs
-#   - Large:  N = 500,000, 15 runs
+#   - Small:  N =     5,000, 30 runs (10 con + 10 cat)
+#   - Medium: N =   500,000, 30 runs (10 con + 10 cat)
+#   - Large:  N = 3,000,000, 15 runs (10 con + 10 cat)
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -23,9 +23,9 @@
 TIER_CONFIGS <- list(
   small = list(
     name = "Small",
-    sampSize = 500,
-    nConVar = 4,
-    nCatVar = 4,
+    sampSize = 5000,
+    nConVar = 10,
+    nCatVar = 10,
     nCatLevels = 4,
     numClust = 2,
     numInit = 5,
@@ -35,9 +35,9 @@ TIER_CONFIGS <- list(
   ),
   medium = list(
     name = "Medium",
-    sampSize = 50000,
-    nConVar = 4,
-    nCatVar = 4,
+    sampSize = 500000,
+    nConVar = 10,
+    nCatVar = 10,
     nCatLevels = 4,
     numClust = 2,
     numInit = 1,
@@ -47,9 +47,9 @@ TIER_CONFIGS <- list(
   ),
   large = list(
     name = "Large",
-    sampSize = 500000,
-    nConVar = 4,
-    nCatVar = 4,
+    sampSize = 3000000,
+    nConVar = 10,
+    nCatVar = 10,
     nCatLevels = 4,
     numClust = 2,
     numInit = 1,
@@ -151,7 +151,7 @@ invoke_worker <- function(rscript, script_path, lib_path, tier_name, runs, seed)
 # ------------------------------------------------------------------------------
 # Statistical Analysis: Mann-Whitney U Superiority Test with Margin delta
 # ------------------------------------------------------------------------------
-analyze_tier <- function(cand_times, base_times, delta = 0.01, alpha = 0.05) {
+analyze_tier <- function(cand_times, base_times, delta = 0.01, alpha = 0.01) {
   # Null hypothesis: Location(cand) >= (1 - delta) * Location(base)
   # Alternative:     Location(cand) <  (1 - delta) * Location(base) (superior)
   scaled_base <- base_times * (1 - delta)
@@ -219,7 +219,7 @@ main <- function() {
     baseline_file = "",
     save_baseline = "",
     delta = 0.01,
-    alpha = 0.05,
+    alpha = 0.01,
     require_all = TRUE,
     quick = FALSE,
     tiers = "small,medium,large",
