@@ -5,11 +5,23 @@ All notable changes to the **kamila** R package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **End-to-End C++ Iteration Engine (`kamilaLoopCpp`)**: Implemented the core while convergence loop in C++ with pre-allocated scratch buffers (`distMat`, `minDist`, `catLogLiks`, `allLogLiks`, `membOld`, `membNew`), achieving near-zero heap memory allocations in the iteration loop (#49).
+- **Native C++ Linear Binning & Gaussian Convolution**: Integrated fast $O(N)$ histogram accumulation and discrete Gaussian convolution directly in C++, removing the dependency on calling R's `KernSmooth::bkde` inside the loop (#49).
+- **$O(N)$ Quantile Selection & Cache-Coherent Streaming**: Replaced $O(N \log N)$ sorting with `std::nth_element` for exact type-7 quantile bandwidth determination, inlined distance/minDist calculations, and implemented contiguous column-streaming for categorical lookups, demonstrating statistically significant performance superiority across Small, Medium, and Large datasets (#49).
+
+### Changed
+- **CRAN Compliance & Cleanup**: Updated `.Rbuildignore` to ignore non-package root files and fixed `inherits(fac, "factor")` in `R/misc_functions.R`.
+
 ---
 
 ## [0.1.3] - 2026-09-07
 
 ### Added
+- **Restored Progress Indicator with Non-Dismissible Notification**: Restored the original floating `withProgress` / `incProgress` notification indicator for benchmark runs, configured with hidden close button styling (`.shiny-notification-close { display: none !important; }`) to maintain full progress visibility during execution.
+- **Standardized Multi-Start Benchmark Runs**: Standardized all compared clustering methods in the interactive Shiny benchmark dashboard (`inst/shiny/horserace/app.R`) to use 5 random initialization starts (`numInit = 5`, `nstart = 5`, `nrep = 5`, `nbKeep = 5`) for fair computational and performance comparisons.
 - **Fast C++ Prediction Strength**: Re-implemented prediction strength evaluation in C++ (`calcPsCpp` via Rcpp) with $O(N + K^2)$ algorithmic complexity, replacing previous $O(N^2)$ pairwise operations (#12, #42).
 - **Parallel Prediction Strength**: Added multi-core parallel processing support for prediction strength cross-validation runs using `numCores` parameter in `kamila()` (#46).
 - **Non-Mixed Data Validation**: Added explicit error validation and informative messaging when non-mixed data (continuous-only or categorical-only) are passed to mixed-data clustering functions (#19).

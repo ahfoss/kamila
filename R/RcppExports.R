@@ -49,3 +49,7 @@ calcPsCpp <- function(testMemb, teIntoTr, numClust) {
     .Call('_kamila_calcPsCpp', PACKAGE = 'kamila', testMemb, teIntoTr, numClust)
 }
 
+kamilaLoopCpp <- function(conVarMat_, catFactorNum_, conWeights, catWeights, initMeans_, initLogProbs_, numLev, catBw, numClust, maxIter, verbose, hasCon, hasCat) {
+    .Call('_kamila_kamilaLoopCpp', PACKAGE = 'kamila', conVarMat_, catFactorNum_, conWeights, catWeights, initMeans_, initLogProbs_, numLev, catBw, numClust, maxIter, verbose, hasCon, hasCat)
+}
+
