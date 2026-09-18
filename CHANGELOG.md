@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.3] - 2026-09-07
 
 ### Added
+- **Restored Progress Indicator with Non-Dismissible Notification**: Restored the original floating `withProgress` / `incProgress` notification indicator for benchmark runs, configured with hidden close button styling (`.shiny-notification-close { display: none !important; }`) to maintain full progress visibility during execution.
+- **Standardized Multi-Start Benchmark Runs**: Standardized all compared clustering methods in the interactive Shiny benchmark dashboard (`inst/shiny/horserace/app.R`) to use 5 random initialization starts (`numInit = 5`, `nstart = 5`, `nrep = 5`, `nbKeep = 5`) for fair computational and performance comparisons.
 - **Fast C++ Prediction Strength**: Re-implemented prediction strength evaluation in C++ (`calcPsCpp` via Rcpp) with $O(N + K^2)$ algorithmic complexity, replacing previous $O(N^2)$ pairwise operations (#12, #42).
 - **Parallel Prediction Strength**: Added multi-core parallel processing support for prediction strength cross-validation runs using `numCores` parameter in `kamila()` (#46).
 - **Non-Mixed Data Validation**: Added explicit error validation and informative messaging when non-mixed data (continuous-only or categorical-only) are passed to mixed-data clustering functions (#19).
