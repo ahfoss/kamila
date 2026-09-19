@@ -66,8 +66,8 @@ Run all commands from the repository root directory using `Rscript` or an intera
 - **Rebuilding Bindings**: Whenever C++ function signatures change, run `Rcpp::compileAttributes()` before testing or committing.
 - **Memory Safety**: Use Rcpp structures (`Rcpp::NumericMatrix`, `Rcpp::IntegerVector`, `Rcpp::NumericVector`) and avoid unmanaged raw pointers.
 
-### Changelog Maintenance
-- **Mandatory Changelog Updates**: Any changes, enhancements, bug fixes, deprecations, or version updates **MUST** be logged in [`CHANGELOG.md`](CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standard).
+### News & Release Notes Maintenance
+- **Mandatory News Updates**: Any changes, enhancements, bug fixes, deprecations, or version updates **MUST** be logged in [`NEWS.md`](NEWS.md) following CRAN package news standards.
 
 ### Pre-Commit Verification & Testing
 Before committing any changes, you **MUST** run and pass all verification checks:
@@ -89,7 +89,7 @@ Before committing any changes, you **MUST** run and pass all verification checks
 - **Commit Format**: Use concise Conventional Commit messages:
   - `feat:` New feature or parameter addition
   - `fix:` Bug fix or error resolution
-  - `docs:` Documentation updates (roxygen2 / README / AGENTS.md / CHANGELOG.md)
+  - `docs:` Documentation updates (roxygen2 / README / AGENTS.md / NEWS.md)
   - `ci:` Pipeline changes (`.github/workflows`)
   - `test:` Adding or updating `testthat` specs
   - `refactor:` Code reorganization without behavior change
