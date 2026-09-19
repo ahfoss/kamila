@@ -47,6 +47,16 @@ Verify that the package builds cleanly with 0 errors, 0 warnings, and 0 notes:
 devtools::check(cran = TRUE)
 ```
 
+### 5. Multi-Platform & Sanitizer Checks (R-hub v2)
+Prior to submitting releases or making low-level C++ changes, run pre-flight checks across multiple architectures and memory sanitizers (e.g., ASAN/UBSAN, Valgrind, Windows UCRT, Linux containers) using R-hub v2:
+```r
+# Verify setup and GitHub PAT
+rhub::rhub_doctor()
+
+# Run interactive or targeted checks
+rhub::rhub_check()
+```
+
 ---
 
 ## 3. Key Development Commands
@@ -60,6 +70,8 @@ devtools::check(cran = TRUE)
 | **Check Code Coverage** | `Rscript -e "covr::package_coverage()"` |
 | **Lint Codebase** | `Rscript -e "lintr::lint_package()"` |
 | **Run Full Package Check** | `Rscript -e "devtools::check(cran = TRUE)"` |
+| **Validate R-hub Setup** | `Rscript -e "rhub::rhub_doctor()"` |
+| **Run R-hub v2 Checks** | `Rscript -e "rhub::rhub_check()"` |
 
 ---
 
