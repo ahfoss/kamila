@@ -543,15 +543,7 @@ ui <- fluidPage(
 
   titlePanel(
     tags$div(
-      tags$div(
-        style = "display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;",
-        tags$h2("Mixed-Type Clustering Horse-Race", style = "margin-bottom: 2px; font-weight: 700;"),
-        tags$span(
-          class = "badge bg-primary",
-          style = "font-size: 0.85rem; padding: 6px 10px;",
-          "Build: 2026-09-10 (v0.1.3-diag-sequential)"
-        )
-      ),
+      tags$h2("Mixed-Type Clustering Horse-Race", style = "margin-bottom: 2px; font-weight: 700;"),
       tags$p(
         "Interactive benchmark comparing mixed-data clustering techniques.",
         style = "color: #6c757d; font-size: 1.05rem;"
