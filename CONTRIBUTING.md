@@ -11,8 +11,8 @@ Thank you for your interest in contributing to **`kamila`**! This document provi
    - Write clean, documented R code following tidyverse/CRAN style.
    - For C++ changes via Rcpp, ensure memory safety and run `Rcpp::compileAttributes()` to regenerate bindings.
    - Document all exported functions using `roxygen2` comments (`#'`) in `R/*.R`. Do **not** manually edit `.Rd` files in `man/`.
-3. **Log Changes to Changelog**:
-   - Every enhancement, bug fix, breaking change, or dependency update **must** be logged in [`CHANGELOG.md`](CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) standard).
+3. **Log Changes to News**:
+   - Every enhancement, bug fix, breaking change, or dependency update **must** be logged in [`NEWS.md`](NEWS.md) following CRAN package news standards.
 4. **Run Pre-Commit Verification**: Ensure all local checks pass before committing (see below).
 5. **Submit a Pull Request**: Provide a clear description of the changes, referencing any relevant issue numbers.
 
@@ -68,7 +68,7 @@ devtools::check(cran = TRUE)
 Commit messages should follow [Conventional Commits](https://www.conventionalcommits.org/):
 - `feat:` New features or parameter additions
 - `fix:` Bug fixes or numerical error corrections
-- `docs:` Documentation updates (roxygen2 comments, README, CHANGELOG.md)
+- `docs:` Documentation updates (roxygen2 comments, README, NEWS.md)
 - `test:` Adding or modifying unit tests
 - `refactor:` Code refactoring without behavioral changes
 - `ci:` CI/CD pipeline modifications

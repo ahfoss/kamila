@@ -49,8 +49,8 @@ For an in-depth discussion of the challenges involved in clustering mixed-type d
 * [Foss and Markatou (2018). kamila: Clustering Mixed-Type Data in R and Hadoop. **Journal of Statistical Software**, 83(13). DOI: 10.18637/jss.v083.i13](https://www.jstatsoft.org/article/view/v083i13)
 * [Foss, Markatou, and Ray (2018). Distance Metrics and Clustering Methods for Mixed-Type Data. **International Statistical Review**. DOI: 10.1111/insr.12274.](https://onlinelibrary.wiley.com/doi/abs/10.1111/insr.12274)
 
-## Updates & Changelog
-For release notes and version history, see [CHANGELOG.md](CHANGELOG.md).
+## Updates & Release News
+For release notes and version history, see [NEWS.md](NEWS.md).
 
 ## [Under Construction] Interactive Clustering Horse-Race App
 
