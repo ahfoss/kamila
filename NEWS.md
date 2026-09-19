@@ -1,3 +1,7 @@
+# kamila 0.2.0
+
+Release tagged version to CRAN.
+
 # kamila 0.1.4
 
 ## Added

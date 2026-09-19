@@ -1,4 +1,4 @@
-## CRAN Submission Comments: kamila 0.1.4
+## CRAN Submission Comments: kamila 0.2.0
 
 ### Test environments
 * local Windows (x86_64-w64-mingw32, R 4.5.3)
